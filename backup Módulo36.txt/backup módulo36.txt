@@ -1,0 +1,542 @@
+Attribute VB_Name = "M dulo36"
+' --- REFERENCIAS ---
+' No requiere referencias manuales (usa Late Binding para SAP y Clipboard).
+' Funciona en SAP GUI 7.40, 7.50, 7.60 y 7.70.
+
+Option Explicit
+
+Sub MonitorZeco()
+    Dim pathXLS As String
+    Dim pathXLS_Rep As String
+    Dim pathCSV As String
+    Dim pathHTML As String
+    Dim folderDashboard As String
+    Dim tempFolder As String
+    Dim pathXLS_Anual As String
+    Dim pathXLS_Rep_Anual As String
+
+    ' Carpeta TEMP de Windows para evitar conflictos con sincronizaci n de OneDrive
+    tempFolder = Environ("TEMP")
+    
+    ' Nombres de archivo  nicos para los temporales de SAP
+    pathXLS = tempFolder & "\zeco_fase1.xlsx"
+    pathXLS_Rep = tempFolder & "\zeco_fase2.xlsx"
+    pathXLS_Anual = tempFolder & "\zeco_anual(temp).xlsx"
+    pathXLS_Rep_Anual = tempFolder & "\zeco_rep_anual(temp).xlsx"
+
+    ' 1. LIMPIEZA INICIAL: Borra archivos f sicos y cierra restos de sesiones anteriores.
+    ' Es el punto donde se eliminan los archivos del disco de forma segura.
+    Call LimpiarEntorno(pathXLS, pathXLS_Rep, pathXLS_Anual, pathXLS_Rep_Anual)
+
+    ' Ruta del Dashboard en OneDrive
+    pathHTML = "T:\Produccion\DOI\PRODUCCION\Segmento PROTOTIPOS\IFA\Aplicaciones\Dashboards\ZECO MONITOR\Dashboard Zeco.html"
+    
+    folderDashboard = Left(pathHTML, InStrRev(pathHTML, "\"))
+   pathCSV = "C:\Users\" & Environ$("USERNAME") & "\TEMP\" & "ZECO " & Format(Date, "dd-mm-yyyy") & ".csv"
+
+    ' 2. Ejecutar proceso de extracci n en SAP
+    Call ExtraerDatosSAP(pathXLS, pathXLS_Rep, pathCSV)
+
+    ' 3. Extraer datos anuales SAP y agregar seccion ---ANUAL--- al CSV
+    Call ExtraerDatosAnuales(pathXLS_Anual, pathXLS_Rep_Anual, pathCSV)
+
+    ' 4. ABRIR DASHBOARD: Lanzamos el navegador primero.
+    If Dir(pathHTML) <> "" Then
+        ThisWorkbook.FollowHyperlink pathHTML
+    Else
+        MsgBox "No se encuentra el archivo Dashboard Zeco.html en la ruta especificada:" & vbCrLf & pathHTML, vbCritical, "Error de Ruta"
+        Exit Sub
+    End If
+
+    ' 4. ESPERA ACTIVA: Pausamos 10 segundos.
+    ' Esto da tiempo a que el comando autom tico de SAP abra los archivos en Excel.
+    application.Wait (Now + TimeValue("0:00:10"))
+    
+    ' 5. CIERRE DEFINITIVO: Ahora que SAP ya los ha abierto, los cerramos por fuerza.
+    Call CerrarLibrosSolo(pathXLS, pathXLS_Rep, pathXLS_Anual, pathXLS_Rep_Anual)
+End Sub
+
+Private Sub ExtraerDatosSAP(pathXLS As String, pathXLS_Rep As String, pathCSV As String)
+    Dim SapGuiAuto As Object, App As Object, connection As Object, session As Object
+    Dim sapPath As String, sapFile1 As String, sapFile2 As String
+    Dim datosParaZECO_REP As String
+    Dim objGrid As Object
+
+    sapPath = Environ("TEMP")
+    sapFile1 = "zeco_fase1.xlsx"
+    sapFile2 = "zeco_fase2.xlsx"
+
+    On Error Resume Next
+    Set SapGuiAuto = GetObject("SAPGUI")
+    If SapGuiAuto Is Nothing Then
+        MsgBox "SAP GUI no est  abierto.", vbCritical, "Conexi n Fallida"
+        Exit Sub
+    End If
+
+    Set App = SapGuiAuto.GetScriptingEngine
+    Set connection = App.Children(0)
+    Set session = connection.Children(0)
+    On Error GoTo 0
+
+    If session Is Nothing Then
+        MsgBox "No hay una sesi n activa de SAP.", vbCritical, "Sesi n no Encontrada"
+        Exit Sub
+    End If
+
+    ' --- SCRIPT 1: TRANSACCI N ZECO ---
+    session.findById("wnd[0]").maximize
+    session.findById("wnd[0]/tbar[0]/okcd").text = "/NZECO"
+    session.findById("wnd[0]").sendVKey 0
+    session.findById("wnd[0]/usr/radX_NGR").Select
+    session.findById("wnd[0]/usr/txtS_ECONR-LOW").text = "ECT*"
+    session.findById("wnd[0]/usr/ctxtS_WERKS-LOW").text = "ES20"
+    session.findById("wnd[0]/tbar[1]/btn[8]").Press
+
+    session.findById("wnd[0]/shellcont/shell").selectItem "000000000003", "1"
+    session.findById("wnd[0]/shellcont/shell").itemContextMenu "000000000003", "1"
+    session.findById("wnd[0]/shellcont/shell").selectContextMenuItem "MLIST"
+
+    DoEvents: application.Wait (Now + TimeValue("0:00:02"))
+
+    Set objGrid = session.findById("wnd[1]/usr/cntlCONT_MTL/shellcont/shell")
+    objGrid.selectColumn "WERKS"
+    objGrid.selectColumn "PRCTR"
+    objGrid.selectColumn "MATNR"
+    objGrid.selectColumn "DISPO"
+    objGrid.selectColumn "EKGRP"
+    objGrid.selectColumn "FEVOR"
+    objGrid.selectColumn "ANDAT"
+    objGrid.SetCurrentCell -1, "WERKS"
+    
+    On Error Resume Next
+    objGrid.contextMenu
+    objGrid.selectContextMenuItem "&COL_INV"
+    On Error GoTo 0
+    
+    objGrid.pressToolbarContextButton "&MB_EXPORT"
+    objGrid.selectContextMenuItem "&XXL"
+
+    session.findById("wnd[2]/usr/ctxtDY_PATH").text = sapPath
+    session.findById("wnd[2]/usr/ctxtDY_FILENAME").text = sapFile1
+    session.findById("wnd[2]/tbar[0]/btn[11]").Press
+
+    If Not EsperarArchivo(pathXLS, 10) Then
+        MsgBox "SAP no gener  el archivo temporal a tiempo (Fase 1).", vbCritical
+        Exit Sub
+    End If
+
+    datosParaZECO_REP = LeerDatosDesdeExcel(pathXLS)
+    
+    If datosParaZECO_REP <> "" Then
+        Call EnviarAlPortapapeles(datosParaZECO_REP)
+    Else
+        MsgBox "No se pudieron obtener datos de ZECO.", vbExclamation
+        Exit Sub
+    End If
+
+    ' --- SCRIPT 2: TRANSACCI N ZECO_REP ---
+    session.findById("wnd[0]/tbar[0]/okcd").text = "/NZECO_REP"
+    session.findById("wnd[0]").sendVKey 0
+    session.findById("wnd[0]/usr/ctxtS_WERKS-LOW").text = "ES20"
+    session.findById("wnd[0]/usr/btn%_S_AENNR_%_APP_%-VALU_PUSH").Press
+    session.findById("wnd[1]/tbar[0]/btn[24]").Press
+    session.findById("wnd[1]/tbar[0]/btn[0]").Press
+    session.findById("wnd[1]/tbar[0]/btn[8]").Press
+    session.findById("wnd[0]/tbar[1]/btn[8]").Press
+
+    Set objGrid = session.findById("wnd[0]/shellcont/shell")
+    objGrid.selectColumn "MATNR"
+    objGrid.selectColumn "WERKS"
+    objGrid.selectColumn "ANDAT"
+    objGrid.selectColumn "LFDNR"
+    
+    On Error Resume Next
+    objGrid.contextMenu
+    objGrid.selectContextMenuItem "&COL_INV"
+    On Error GoTo 0
+
+    objGrid.pressToolbarContextButton "&MB_EXPORT"
+    objGrid.selectContextMenuItem "&XXL"
+
+    session.findById("wnd[1]/usr/ctxtDY_PATH").text = sapPath
+    session.findById("wnd[1]/usr/ctxtDY_FILENAME").text = sapFile2
+    session.findById("wnd[1]/tbar[0]/btn[11]").Press
+
+    If Not EsperarArchivo(pathXLS_Rep, 10) Then
+        MsgBox "SAP no gener  el archivo temporal a tiempo (Fase 2).", vbCritical
+        Exit Sub
+    End If
+
+    Call LimpiarYConvertirCSV(pathXLS_Rep, pathCSV)
+End Sub
+
+Private Sub LimpiarYConvertirCSV(rutaOrigen As String, rutaDestino As String)
+    Dim wb As Workbook, ws As Worksheet
+    Dim lastRow As Long, r As Long, c As Long
+    Dim fnum As Integer, lineText As String
+    Dim fileNameOnly As String
+    Dim resp As VbMsgBoxResult
+    Dim colsToExport As Variant
+    
+    colsToExport = Array(1, 5, 6, 7)
+    fileNameOnly = Mid(rutaOrigen, InStrRev(rutaOrigen, "\") + 1)
+    application.DisplayAlerts = False
+    
+    On Error Resume Next
+    Set wb = Workbooks(fileNameOnly)
+    If wb Is Nothing Then Set wb = Workbooks.Open(rutaOrigen)
+    On Error GoTo 0
+
+    If wb Is Nothing Then
+        application.DisplayAlerts = True
+        MsgBox "No se pudo abrir el archivo de resultados.", vbCritical
+        Exit Sub
+    End If
+
+    Set ws = wb.Sheets(1)
+    ws.Columns("A:A").TextToColumns Destination:=ws.Range("A1"), DataType:=xlDelimited, Comma:=True
+    
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    ws.Range("A1:G" & lastRow).RemoveDuplicates Columns:=1, header:=xlYes
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+REINTENTO_ESCRITURA:
+    fnum = FreeFile
+    On Error Resume Next
+    Open rutaDestino For Output As #fnum
+    
+    If Err.Number <> 0 Then
+        If Err.Number = 70 Then
+            Err.Clear
+            On Error GoTo 0
+            resp = MsgBox("El archivo CSV est  bloqueado por el Dashboard o OneDrive." & vbCrLf & _
+                          "Cierra el navegador y pulsa 'Reintentar'.", _
+                          vbRetryCancel + vbExclamation, "Archivo Bloqueado")
+            If resp = vbRetry Then GoTo REINTENTO_ESCRITURA Else Exit Sub
+        Else
+            MsgBox "Error al escribir CSV: " & Err.Description, vbCritical
+            wb.Close SaveChanges:=False
+            Exit Sub
+        End If
+    End If
+    On Error GoTo 0
+    
+    Print #fnum, "N  ECT;Fecha;Proyecto;Descripci n"
+    
+    For r = 2 To lastRow
+        lineText = ""
+        For c = 0 To 3
+            Dim val As String
+            val = Replace(CStr(ws.Cells(r, colsToExport(c)).value), ";", ",")
+            lineText = lineText & val & IIf(c < 3, ";", "")
+        Next c
+        Print #fnum, lineText
+    Next r
+    
+    Close #fnum
+    
+    wb.Close SaveChanges:=False
+    application.DisplayAlerts = True
+End Sub
+
+Private Function LeerDatosDesdeExcel(rutaFile As String) As String
+    Dim wb As Workbook, ws As Worksheet
+    Dim lastRow As Long, i As Long, concatenado As String
+    Dim fileNameOnly As String
+
+    fileNameOnly = Mid(rutaFile, InStrRev(rutaFile, "\") + 1)
+    application.DisplayAlerts = False
+
+    On Error Resume Next
+    Set wb = Workbooks(fileNameOnly)
+    If wb Is Nothing Then Set wb = Workbooks.Open(rutaFile, ReadOnly:=True)
+    On Error GoTo 0
+
+    If wb Is Nothing Then
+        application.DisplayAlerts = True
+        Exit Function
+    End If
+
+    Set ws = wb.Sheets(1)
+    ws.Columns("A:A").TextToColumns Destination:=ws.Range("A1"), DataType:=xlDelimited, Comma:=True, Tab:=True
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    For i = 2 To lastRow
+        If ws.Cells(i, 1).value <> "" Then
+            concatenado = concatenado & ws.Cells(i, 1).value & vbCrLf
+        End If
+    Next i
+
+    wb.Close SaveChanges:=False
+    application.DisplayAlerts = True
+    LeerDatosDesdeExcel = concatenado
+End Function
+
+Private Function EsperarArchivo(ruta As String, segundos As Integer) As Boolean
+    Dim inicio As Single: inicio = Timer
+    Do While Timer < inicio + segundos
+        If Dir(ruta) <> "" Then
+            On Error Resume Next
+            Dim f As Integer: f = FreeFile
+            Open ruta For Append Access Write As #f
+            If Err.Number = 0 Then
+                Close #f: EsperarArchivo = True: Exit Function
+            End If
+            Err.Clear: On Error GoTo 0
+        End If
+        DoEvents
+    Loop
+    EsperarArchivo = False
+End Function
+
+Private Sub LimpiarEntorno(f1 As String, f2 As String, Optional f3 As String = "", Optional f4 As String = "")
+    Dim n1 As String, n2 As String, n3 As String, n4 As String
+    Dim wb As Workbook
+    n1 = Mid(f1, InStrRev(f1, "\") + 1)
+    n2 = Mid(f2, InStrRev(f2, "\") + 1)
+    If f3 <> "" Then n3 = Mid(f3, InStrRev(f3, "\") + 1)
+    If f4 <> "" Then n4 = Mid(f4, InStrRev(f4, "\") + 1)
+    
+    On Error Resume Next
+    ' Cierre de libros abiertos iterando la colecci n para asegurar el desbloqueo
+    For Each wb In Workbooks
+        If wb.Name = n1 Or wb.Name = n2 Then wb.Close SaveChanges:=False
+        If f3 <> "" And wb.Name = n3 Then wb.Close SaveChanges:=False
+        If f4 <> "" And wb.Name = n4 Then wb.Close SaveChanges:=False
+    Next wb
+    
+    DoEvents
+    
+    ' Eliminaci n f sica de archivos en la carpeta TEMP
+    If Dir(f1) <> "" Then Kill f1
+    If Dir(f2) <> "" Then Kill f2
+    If f3 <> "" And Dir(f3) <> "" Then Kill f3
+    If f4 <> "" And Dir(f4) <> "" Then Kill f4
+    On Error GoTo 0
+End Sub
+
+Private Sub CerrarLibrosSolo(f1 As String, f2 As String, Optional f3 As String = "", Optional f4 As String = "")
+    Dim n1 As String, n2 As String, n3 As String, n4 As String
+    Dim wb As Workbook
+    n1 = Mid(f1, InStrRev(f1, "\") + 1)
+    n2 = Mid(f2, InStrRev(f2, "\") + 1)
+    If f3 <> "" Then n3 = Mid(f3, InStrRev(f3, "\") + 1)
+    If f4 <> "" Then n4 = Mid(f4, InStrRev(f4, "\") + 1)
+    
+    On Error Resume Next
+    application.DisplayAlerts = False
+    ' Recorremos la colecci n de libros actuales para cerrar los que SAP acaba de abrir
+    For Each wb In Workbooks
+        If wb.Name = n1 Or wb.Name = n2 Then wb.Close SaveChanges:=False
+        If f3 <> "" And wb.Name = n3 Then wb.Close SaveChanges:=False
+        If f4 <> "" And wb.Name = n4 Then wb.Close SaveChanges:=False
+    Next wb
+    application.DisplayAlerts = True
+    DoEvents
+    On Error GoTo 0
+End Sub
+
+Private Sub EnviarAlPortapapeles(texto As String)
+    Dim dataObj As Object
+    On Error Resume Next
+    Set dataObj = CreateObject("New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
+    dataObj.SetText texto
+    dataObj.PutInClipboard
+    On Error GoTo 0
+End Sub
+
+Private Sub ExtraerDatosAnuales(pathXLS_Anual As String, pathXLS_Rep_Anual As String, pathCSV As String)
+    Dim SapGuiAuto As Object, App As Object, connection As Object, session As Object
+    Dim sapPath As String
+    Dim sapFileAnual As String, sapFileRepAnual As String
+    Dim datosAnuales As String
+    Dim fechaInicioAnual As String, fechaFinAnual As String
+    Dim objGrid As Object
+
+    sapPath = Environ("TEMP")
+    sapFileAnual = "zeco_anual(temp).xlsx"
+    sapFileRepAnual = "zeco_rep_anual(temp).xlsx"
+
+    ' Rango de fechas dinamico: desde hace un anno hasta hoy
+    fechaInicioAnual = Format(DateAdd("yyyy", -1, Date), "dd.mm.yyyy")
+    fechaFinAnual = Format(Date, "dd.mm.yyyy")
+
+    On Error Resume Next
+    Set SapGuiAuto = GetObject("SAPGUI")
+    If SapGuiAuto Is Nothing Then
+        MsgBox "SAP GUI no esta abierto (flujo anual).", vbCritical, "Conexión Fallida"
+        Exit Sub
+    End If
+    Set App = SapGuiAuto.GetScriptingEngine
+    Set connection = App.Children(0)
+    Set session = connection.Children(0)
+    On Error GoTo 0
+
+    If session Is Nothing Then
+        MsgBox "No hay una sesión activa de SAP (flujo anual).", vbCritical, "Sesión no Encontrada"
+        Exit Sub
+    End If
+
+    ' --- ZECO ANUAL: Todos los registros con filtro de fecha ---
+    session.findById("wnd[0]/tbar[0]/okcd").text = "/NZECO"
+    session.findById("wnd[0]").sendVKey 0
+    session.findById("wnd[0]/usr/radX_ALLE").Select
+    session.findById("wnd[0]/usr/txtS_ECONR-LOW").text = "ECT*"
+    session.findById("wnd[0]/usr/ctxtS_ANDAT-LOW").text = fechaInicioAnual
+    session.findById("wnd[0]/usr/ctxtS_ANDAT-HIGH").text = fechaFinAnual
+    session.findById("wnd[0]/usr/ctxtS_WERKS-LOW").text = "ES20"
+    session.findById("wnd[0]/tbar[1]/btn[8]").Press
+
+    session.findById("wnd[0]/shellcont/shell").selectItem "000000000003", "1"
+    session.findById("wnd[0]/shellcont/shell").itemContextMenu "000000000003", "1"
+    session.findById("wnd[0]/shellcont/shell").selectContextMenuItem "MLIST"
+
+    DoEvents: application.Wait (Now + TimeValue("0:00:02"))
+
+    Set objGrid = session.findById("wnd[1]/usr/cntlCONT_MTL/shellcont/shell")
+    objGrid.selectColumn "WERKS"
+    objGrid.selectColumn "PRCTR"
+    objGrid.selectColumn "MATNR"
+    objGrid.selectColumn "DISPO"
+    objGrid.selectColumn "EKGRP"
+    objGrid.selectColumn "FEVOR"
+    objGrid.selectColumn "ANDAT"
+    objGrid.SetCurrentCell -1, "WERKS"
+
+    On Error Resume Next
+    objGrid.contextMenu
+    objGrid.selectContextMenuItem "&COL_INV"
+    On Error GoTo 0
+
+    objGrid.pressToolbarContextButton "&MB_EXPORT"
+    objGrid.selectContextMenuItem "&XXL"
+
+    session.findById("wnd[2]/usr/ctxtDY_PATH").text = sapPath
+    session.findById("wnd[2]/usr/ctxtDY_FILENAME").text = sapFileAnual
+    session.findById("wnd[2]/tbar[0]/btn[11]").Press
+
+    If Not EsperarArchivo(pathXLS_Anual, 30) Then
+        MsgBox "SAP no generó el archivo temporal a tiempo (ZECO anual).", vbCritical
+        Exit Sub
+    End If
+
+    datosAnuales = LeerDatosDesdeExcel(pathXLS_Anual)
+
+    If datosAnuales <> "" Then
+        Call EnviarAlPortapapeles(datosAnuales)
+    Else
+        MsgBox "No se pudieron obtener datos anuales de ZECO.", vbExclamation
+        Exit Sub
+    End If
+
+    ' --- ZECO_REP ANUAL ---
+    session.findById("wnd[0]/tbar[0]/okcd").text = "/NZECO_REP"
+    session.findById("wnd[0]").sendVKey 0
+    session.findById("wnd[0]/usr/ctxtS_WERKS-LOW").text = "ES20"
+    session.findById("wnd[0]/usr/btn%_S_AENNR_%_APP_%-VALU_PUSH").Press
+    session.findById("wnd[1]/tbar[0]/btn[24]").Press
+    session.findById("wnd[1]/tbar[0]/btn[0]").Press
+    session.findById("wnd[1]/tbar[0]/btn[8]").Press
+    session.findById("wnd[0]/tbar[1]/btn[8]").Press
+
+    Set objGrid = session.findById("wnd[0]/shellcont/shell")
+    objGrid.SetCurrentCell -1, "LFDNR"
+    objGrid.selectColumn "MATNR"
+    objGrid.selectColumn "WERKS"
+    objGrid.selectColumn "ANDAT"
+    objGrid.selectColumn "LFDNR"
+
+    On Error Resume Next
+    objGrid.contextMenu
+    objGrid.selectContextMenuItem "&COL_INV"
+    On Error GoTo 0
+
+    objGrid.pressToolbarContextButton "&MB_EXPORT"
+    objGrid.selectContextMenuItem "&XXL"
+
+    session.findById("wnd[1]/usr/ctxtDY_PATH").text = sapPath
+    session.findById("wnd[1]/usr/ctxtDY_FILENAME").text = sapFileRepAnual
+    session.findById("wnd[1]/tbar[0]/btn[11]").Press
+
+    If Not EsperarArchivo(pathXLS_Rep_Anual, 30) Then
+        MsgBox "SAP no generó el archivo temporal a tiempo (ZECO_REP anual).", vbCritical
+        Exit Sub
+    End If
+
+    ' Agregar datos anuales al CSV (seccion separada por ---ANUAL---)
+    Call AppendAnualCSV(pathXLS_Rep_Anual, pathCSV)
+End Sub
+
+Private Sub AppendAnualCSV(rutaOrigen As String, rutaDestino As String)
+    Dim wb As Workbook, ws As Worksheet
+    Dim lastRow As Long, r As Long, c As Long
+    Dim fnum As Integer, lineText As String
+    Dim fileNameOnly As String
+    Dim resp As VbMsgBoxResult
+    Dim colsToExport As Variant
+    Dim val As String
+
+    colsToExport = Array(1, 5, 6, 7)
+    fileNameOnly = Mid(rutaOrigen, InStrRev(rutaOrigen, "\") + 1)
+    application.DisplayAlerts = False
+
+    On Error Resume Next
+    Set wb = Workbooks(fileNameOnly)
+    If wb Is Nothing Then Set wb = Workbooks.Open(rutaOrigen)
+    On Error GoTo 0
+
+    If wb Is Nothing Then
+        application.DisplayAlerts = True
+        MsgBox "No se pudo abrir el archivo de resultados anuales.", vbCritical
+        Exit Sub
+    End If
+
+    Set ws = wb.Sheets(1)
+    ws.Columns("A:A").TextToColumns Destination:=ws.Range("A1"), DataType:=xlDelimited, Comma:=True
+
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    ws.Range("A1:G" & lastRow).RemoveDuplicates Columns:=1, header:=xlYes
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+REINTENTO_ANUAL:
+    fnum = FreeFile
+    On Error Resume Next
+    Open rutaDestino For Append As #fnum
+
+    If Err.Number <> 0 Then
+        If Err.Number = 70 Then
+            Err.Clear
+            On Error GoTo 0
+            resp = MsgBox("El archivo CSV esta bloqueado por el Dashboard o OneDrive." & vbCrLf & _
+                          "Cierra el navegador y pulsa 'Reintentar'.", _
+                          vbRetryCancel + vbExclamation, "Archivo Bloqueado")
+            If resp = vbRetry Then GoTo REINTENTO_ANUAL Else wb.Close SaveChanges:=False: application.DisplayAlerts = True: Exit Sub
+        Else
+            MsgBox "Error al escribir seccion anual en CSV: " & Err.Description, vbCritical
+            wb.Close SaveChanges:=False
+            application.DisplayAlerts = True
+            Exit Sub
+        End If
+    End If
+    On Error GoTo 0
+
+    Print #fnum, "---ANUAL---"
+    Print #fnum, "N" & Chr(186) & " ECT;Fecha;Proyecto;Descripci" & Chr(243) & "n"
+
+    For r = 2 To lastRow
+        lineText = ""
+        For c = 0 To 3
+            val = Replace(CStr(ws.Cells(r, colsToExport(c)).Value), ";", ",")
+            lineText = lineText & val & IIf(c < 3, ";", "")
+        Next c
+        Print #fnum, lineText
+    Next r
+
+    Close #fnum
+
+    wb.Close SaveChanges:=False
+    application.DisplayAlerts = True
+End Sub
+
+
+

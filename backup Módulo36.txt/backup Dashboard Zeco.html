@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZECO - Dual Monitor</title>
+    <!-- Librería Three.js para renderizado 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --accent: #10b981; 
+            --border: #e2e8f0;
+            --success: #10b981;
+            --shadow: 0 10px 25px -5px rgba(167, 243, 208, 0.4), 0 8px 10px -6px rgba(167, 243, 208, 0.2);
+            --hvac-body: #e2e8f0;
+            --hvac-stroke: #94a3b8;
+            --sap-gold: #f0ab00;
+            --excel-green: #217346;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #60a5fa;
+            --border: #334155;
+            --accent: #10b981;
+            --shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.1), 0 8px 10px -6px rgba(5, 150, 105, 0.05);
+            --hvac-body: #1e293b;
+            --hvac-stroke: #475569;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; transition: background 0.3s; line-height: 1.5; overflow-x: hidden; }
+
+        header { 
+            display: grid; 
+            grid-template-columns: 1fr auto 1fr; 
+            align-items: center; 
+            margin-bottom: 30px; 
+            border-bottom: 1px solid var(--border); 
+            padding-bottom: 15px; 
+        }
+        h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+        
+        .header-info { display: flex; flex-direction: column; gap: 2px; }
+        .datetime-display { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+
+        .header-right {
+            display: flex; 
+            gap: 10px; 
+            align-items: center; 
+            justify-content: flex-end;
+        }
+
+        .btn {
+            background: var(--primary); color: white; border: none; padding: 8px 16px;
+            border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s;
+            display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+            font-weight: 500;
+        }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background: var(--border); }
+        
+        .btn-ghost {
+            background: transparent !important;
+            color: var(--primary) !important;
+            border: 1px solid var(--primary) !important;
+            box-shadow: none !important;
+        }
+        .btn-ghost:hover { background: rgba(37, 99, 235, 0.1) !important; }
+        .btn-excel { background-color: var(--excel-green) !important; color: white !important; }
+        .btn-excel:hover { filter: brightness(1.1); }
+
+        .home-container {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 60vh; text-align: center;
+        }
+        .app-card {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px;
+            padding: 40px; width: 100%; max-width: 450px; cursor: pointer; transition: 0.3s;
+            box-shadow: var(--shadow); position: relative;
+        }
+        .app-card:hover { transform: translateY(-5px); border-color: var(--primary); }
+        
+        .hvac-icon-container { width: 240px; height: 240px; margin: 0 auto 20px auto; }
+        .hvac-header-icon { width: 180px; height: 180px; } 
+        
+        .hvac-fan { transform-origin: 40px 50px; animation: hvac-spin 3s linear infinite; }
+        @keyframes hvac-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .hvac-air { animation: hvac-pulse 2s ease-in-out infinite; }
+        @keyframes hvac-pulse { 0%, 100% { opacity: 0.3; transform: translateX(0); } 50% { opacity: 1; transform: translateX(5px); } }
+
+        .checkbox-container {
+            margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 10px;
+            font-size: 0.95rem; color: var(--text-main); cursor: pointer; padding: 10px;
+            border-radius: 8px; background: rgba(0,0,0,0.03); width: fit-content; margin-left: auto; margin-right: auto;
+        }
+        [data-theme="dark"] .checkbox-container { background: rgba(255,255,255,0.05); }
+        .checkbox-container input { cursor: pointer; width: 18px; height: 18px; }
+
+        .btn-group { display: flex; gap: 2px; background: var(--border); padding: 2px; border-radius: 8px; }
+        .btn-group .btn-toggle { 
+            background: transparent; color: var(--text-muted); border: none; padding: 6px 12px; 
+            font-size: 0.8rem; border-radius: 6px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-group .btn-toggle.active { background: var(--card-bg); color: var(--primary); font-weight: bold; box-shadow: var(--shadow); }
+
+        .theme-toggle { background: var(--card-bg); border: 1px solid var(--border); color: var(--text-main); padding: 8px; border-radius: 50%; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+
+        .dashboard-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px; margin-bottom: 25px;
+        }
+        .card { background: var(--card-bg); padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; position: relative; transition: transform 0.2s ease; }
+        .card.highlight { border-left: 4px solid var(--primary); }
+        .card.contextual { border-left: 4px solid var(--accent); background: rgba(16, 185, 129, 0.02); }
+        
+        .card-title { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .card-value { font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+        .card-subtext { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .main-content { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 1100px) { .main-content { grid-template-columns: 1fr; } }
+
+        .chart-viewport { 
+            height: 500px; width: 100%; position: relative; border-radius: 8px;
+            overflow: hidden; background: #fdfdfd; cursor: grab;
+        }
+        .chart-viewport:active { cursor: grabbing; }
+        [data-theme="dark"] .chart-viewport { background: #0a0f1d; }
+        
+        canvas, svg { display: block; width: 100%; height: 100%; }
+        svg text { font-size: 11px; fill: var(--text-main); user-select: none; font-weight: 500; }
+
+        .filters { display: flex; gap: 12px; margin-bottom: 25px; align-items: center; flex-wrap: wrap; }
+        select, .date-input { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; outline: none; }
+        select { min-width: 240px; }
+        .date-input { min-width: 150px; color-scheme: light dark; }
+        .date-input:focus { border-color: var(--primary); }
+
+        .table-container { overflow-x: auto; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--card-bg); }
+        th { text-align: left; padding: 14px; border-bottom: 2px solid var(--border); color: var(--text-muted); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
+        td { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+        tr:hover td { background: rgba(0,0,0,0.01); }
+
+        .pill { display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; margin-right: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .pill.accent { background: var(--accent); color: white; }
+        .pill span { cursor: pointer; font-size: 1.1rem; line-height: 1; }
+
+        .hidden { display: none; }
+        .toast {
+            position: fixed; bottom: 30px; right: 30px; background: var(--success);
+            color: white; padding: 14px 28px; border-radius: 10px; transform: translateY(150px);
+            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.2); font-weight: 600;
+        }
+        .toast.show { transform: translateY(0); }
+
+        #custom-tooltip {
+            position: fixed; background: rgba(15, 23, 42, 0.95); color: white;
+            padding: 10px 14px; border-radius: 8px; font-size: 12px;
+            pointer-events: none; display: none; z-index: 9000; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1); line-height: 1.4;
+        }
+
+        .zoom-controls {
+            position: absolute; top: 20px; right: 20px;
+            display: flex; flex-direction: column; gap: 8px; z-index: 100;
+        }
+        .zoom-btn {
+            width: 36px; height: 36px; border-radius: 8px;
+            background: var(--card-bg); border: 1px solid var(--border);
+            color: var(--text-main); display: flex; align-items: center;
+            justify-content: center; cursor: pointer; font-weight: bold; font-size: 1.1rem;
+            box-shadow: var(--shadow); transition: 0.2s;
+        }
+        .zoom-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .section-label { 
+            grid-column: 1 / -1; font-size: 0.65rem; font-weight: bold; 
+            color: var(--text-muted); text-transform: uppercase; margin-top: 10px; 
+            border-bottom: 1px solid var(--border); padding-bottom: 5px;
+        }
+
+        /* Modals */
+        .modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.8); display: none; align-items: center; justify-content: center; z-index: 8000; backdrop-filter: blur(5px); padding: 20px; }
+        .modal-content { background: var(--card-bg); padding: 35px; border-radius: 20px; width: 100%; max-width: 650px; box-shadow: 0 25px 60px rgba(0,0,0,0.4); max-height: 90vh; overflow-y: auto; position: relative; }
+        
+        .help-list { padding-left: 0; font-size: 0.9rem; color: var(--text-main); list-style-type: none; }
+        .help-list li { margin-bottom: 25px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+        .help-list strong { color: var(--primary); display: block; margin-bottom: 8px; font-size: 1.05rem; }
+        
+        .sap-step { background: rgba(37, 99, 235, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid var(--primary); margin: 12px 0; line-height: 1.6; }
+        [data-theme="dark"] .sap-step { background: rgba(59, 130, 246, 0.1); }
+
+        .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; }
+        .page-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-main); cursor: pointer; font-size: 0.85rem; }
+        .page-btn.active { background: var(--primary); color: white; border-color: var(--primary); font-weight: bold; }
+
+        .windchill-link {
+            margin-left: 8px; color: var(--sap-gold); text-decoration: none; cursor: pointer; padding: 2px;
+            border-radius: 4px; display: inline-flex; align-items: center; transition: all 0.2s; vertical-align: middle;
+        }
+        .windchill-link:hover { background: rgba(240, 171, 0, 0.1); transform: scale(1.1); }
+    </style>
+</head>
+<body data-theme="dark">
+
+    <div id="custom-tooltip"></div>
+
+    <header>
+        <div class="header-info">
+            <h1 id="main-title">Ingeniería de Fabricación</h1>
+            <div id="datetime-display" class="datetime-display">Cargando fecha y hora...</div>
+            <div id="filter-pills" style="margin-top: 4px;"></div>
+        </div>
+
+        <div class="hvac-header-icon hidden" id="header-hvac-icon">
+            <svg viewBox="0 0 100 100">
+                <rect x="20" y="35" width="60" height="30" rx="4" fill="var(--hvac-body)" stroke="var(--hvac-stroke)" stroke-width="2" />
+                <path d="M20 45 L80 45 M20 55 L80 55" stroke="var(--hvac-stroke)" stroke-width="1" opacity="0.3" />
+                <rect x="65" y="40" width="10" height="20" rx="1" fill="#0f172a" />
+                <g class="hvac-fan">
+                    <circle cx="40" cy="50" r="12" fill="var(--hvac-stroke)" opacity="0.4" />
+                    <path d="M40 38 L40 42 M40 58 L40 62 M28 50 L32 50 M48 50 L52 50" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" />
+                    <circle cx="40" cy="50" r="3" fill="var(--primary)" />
+                </g>
+                <g class="hvac-air" style="color: #3b82f6;">
+                    <path d="M85 45 Q90 45 90 40" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M85 50 Q95 50 95 45" fill="none" stroke="currentColor" stroke-width="2" opacity="0.6" />
+                    <path d="M85 55 Q90 55 90 60" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4" />
+                </g>
+            </svg>
+        </div>
+
+        <div class="header-right">
+            <button class="btn btn-outline hidden" id="back-home-btn" title="Volver al inicio">🏠</button>
+            <button class="btn btn-outline" id="reset-storage" title="Reiniciar datos">🔄</button>
+            <button class="btn btn-outline" id="fullscreen-btn" title="Pantalla completa">⛶</button>
+            <button class="theme-toggle" id="theme-btn" title="Cambiar tema">🌙</button>
+            <button class="btn btn-outline" id="help-btn" title="Ayuda">❓</button>
+        </div>
+    </header>
+
+    <!-- Pantalla de Inicio -->
+    <div id="home-view" class="home-container">
+        <h2 style="margin-bottom: 30px; font-weight: 800; letter-spacing: -0.01em;">Monitor de ECTs</h2>
+        <div class="app-card" id="open-dashboard-card">
+            <div class="hvac-icon-container">
+                <svg viewBox="0 0 100 100">
+                    <rect x="20" y="35" width="60" height="30" rx="4" fill="var(--hvac-body)" stroke="var(--hvac-stroke)" stroke-width="2" />
+                    <path d="M20 45 L80 45 M20 55 L80 55" stroke="var(--hvac-stroke)" stroke-width="1" opacity="0.3" />
+                    <rect x="65" y="40" width="10" height="20" rx="1" fill="#0f172a" />
+                    <g class="hvac-fan">
+                        <circle cx="40" cy="50" r="12" fill="var(--hvac-stroke)" opacity="0.4" />
+                        <path d="M40 38 L40 42 M40 58 L40 62 M28 50 L32 50 M48 50 L52 50" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" />
+                        <circle cx="40" cy="50" r="3" fill="var(--primary)" />
+                    </g>
+                    <g class="hvac-air" style="color: #3b82f6;">
+                        <path d="M85 45 Q90 45 90 40" fill="none" stroke="currentColor" stroke-width="2" />
+                        <path d="M85 50 Q95 50 95 45" fill="none" stroke="currentColor" stroke-width="2" opacity="0.6" />
+                        <path d="M85 55 Q90 55 90 60" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4" />
+                    </g>
+                </svg>
+            </div>
+            <h3 style="margin: 0 0 10px 0;">Dashboard de ECTs Pendientes</h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">Visualización avanzada de carga de trabajo por proyectos y periodos temporales.</p>
+            <label class="checkbox-container" onclick="event.stopPropagation()">
+                <input type="checkbox" id="force-mapping-check"> 
+                <span>Asignar columnas manualmente</span>
+            </label>
+            <label class="btn" style="margin-top: 25px; width: 100%; justify-content: center; cursor: pointer; padding: 12px;" onclick="event.stopPropagation()">
+                📂 Cargar archivo CSV
+                <input type="file" id="home-csv-input" accept=".csv" style="display:none">
+            </label>
+            <div id="quick-access-btn" class="btn btn-outline hidden" style="margin-top: 10px; width: 100%; justify-content: center; padding: 12px;" onclick="event.stopPropagation()">
+                Ver sesión actual
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de Carga Fallback -->
+    <div id="upload-view" class="upload-container hidden">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">📁</div>
+        <h3>Módulo de Importación</h3>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Seleccione el archivo CSV para procesar.</p>
+        <label class="btn" style="padding: 14px 30px; cursor: pointer;">
+            🔍 Seleccionar Archivo
+            <input type="file" id="csv-input" accept=".csv">
+        </label>
+    </div>
+
+    <!-- Dashboard Principal -->
+    <div id="dashboard-view" class="hidden">
+        <div class="dashboard-grid">
+            <div class="section-label">Métricas Globales</div>
+            <div class="card highlight">
+                <div class="card-title">ECTs Pendientes</div>
+                <div class="card-value" id="stat-total-global">0</div>
+            </div>
+            <div class="card highlight">
+                <div class="card-title">Pico Temporal</div>
+                <div class="card-value" id="stat-peak-month-global">-</div>
+            </div>
+            <div class="card highlight">
+                <div class="card-title">Proyecto Crítico</div>
+                <div class="card-value" id="stat-peak-project-global">-</div>
+                <div id="stat-peak-project-desc-global" class="card-subtext"></div>
+            </div>
+
+            <div class="section-label">Filtros Activos</div>
+            <div class="card contextual">
+                <div class="card-title">Registros Filtrados</div>
+                <div class="card-value" id="stat-total-local">0</div>
+            </div>
+            <div class="card contextual">
+                <div class="card-title">Mes Seleccionado</div>
+                <div class="card-value" id="stat-selected-month">-</div>
+            </div>
+            <div class="card contextual">
+                <div class="card-title">Proyecto Crítico (Selección)</div>
+                <div class="card-value" id="stat-peak-project-local">-</div>
+                <div id="stat-peak-project-desc-local" class="card-subtext"></div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <select id="project-select">
+                <option value="">Filtrado por Proyecto...</option>
+            </select>
+            <div style="display: flex; gap: 4px; align-items: center;">
+                <input type="date" id="date-start" class="date-input" title="Fecha Inicio">
+                <span style="color: var(--text-muted);">→</span>
+                <input type="date" id="date-end" class="date-input" title="Fecha Fin">
+            </div>
+            <button class="btn btn-outline" id="clear-filters">Limpiar Filtros</button>
+            <button class="btn btn-outline" id="new-file-btn">Nuevo CSV</button>
+        </div>
+
+        <div class="main-content">
+            <!-- GRÁFICO 1: DINÁMICO (FILTRADO) -->
+            <div class="card" style="padding: 0; overflow: visible; height: fit-content;">
+                <div style="padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
+                    <span style="font-weight: 700;">Gráfico de Tendencia (Filtrado)</span>
+                    <div style="display: flex; gap: 10px;">
+                        <div class="btn-group" id="dim-toggle-f">
+                            <button class="btn-toggle active" data-val="2D">2D</button>
+                            <button class="btn-toggle" data-val="3D">3D</button>
+                        </div>
+                        <div class="btn-group" id="type-toggle-f">
+                            <button class="btn-toggle active" data-val="bars">Barras</button>
+                            <button class="btn-toggle" data-val="lines">Líneas</button>
+                            <button class="btn-toggle" data-val="circular">Circular</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-viewport" id="chart-host-f">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" title="Acercar" onclick="adjustZoom(false, 0.8)">+</button>
+                        <button class="zoom-btn" title="Reiniciar" onclick="resetView(false)">⟲</button>
+                        <button class="zoom-btn" title="Alejar" onclick="adjustZoom(false, 1.2)">-</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GRÁFICO 2: ESTÁTICO (GLOBAL) -->
+            <div class="card" style="padding: 0; overflow: visible; height: fit-content;">
+                <div style="padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
+                    <span style="font-weight: 700;">Tendencia Anual (Últimos 12 Meses)</span>
+                    <div style="display: flex; gap: 10px;">
+                        <div class="btn-group" id="dim-toggle-g">
+                            <button class="btn-toggle active" data-val="2D">2D</button>
+                            <button class="btn-toggle" data-val="3D">3D</button>
+                        </div>
+                        <div class="btn-group" id="type-toggle-g">
+                            <button class="btn-toggle active" data-val="bars">Barras</button>
+                            <button class="btn-toggle" data-val="lines">Líneas</button>
+                            <button class="btn-toggle" data-val="circular">Circular</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-viewport" id="chart-host-g">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" title="Acercar" onclick="adjustZoom(true, 0.8)">+</button>
+                        <button class="zoom-btn" title="Reiniciar" onclick="resetView(true)">⟲</button>
+                        <button class="zoom-btn" title="Alejar" onclick="adjustZoom(true, 1.2)">-</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 25px;">
+            <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <span>Listado Detallado de Órdenes</span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-ghost" id="copy-ids" title="Copiar Lista de IDs únicos" style="padding: 6px 10px; min-width: 38px; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                        </svg>
+                    </button>
+                    <button class="btn btn-excel" id="copy-rows" title="Exportar Filas (Excel)" style="padding: 6px 10px; min-width: 38px; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <path d="M14 2v6h6"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%;">Nº ECT</th>
+                            <th style="width: 15%;">Fecha</th>
+                            <th style="width: 20%;">Cod. Proyecto</th>
+                            <th style="width: 50%;">Descripción del Proyecto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+            <div id="pagination" class="pagination"></div>
+        </div>
+    </div>
+
+    <!-- Modales -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 20px;">Manual de Instrucciones</h3>
+            <ul class="help-list">
+                <li>
+                    <strong>1) Descarga de datos de SAP</strong>
+                    <div class="sap-step">Fase A: Transacción ZECO. Filtra por "ECOs para procesar" con el rol "Coord.Producción" y ejecuta. Exporta el resultado a Excel.</div>
+                    <div class="sap-step">Fase B: Transacción ZECO_REP. Pega los números de ECT para obtener las descripciones de proyecto asociadas.</div>
+                </li>
+                <li>
+                    <strong>2) Pantalla Dual</strong>
+                    <div class="sap-step">A la izquierda verás la tendencia filtrada por tus selecciones. A la derecha, la tendencia anual de los últimos 12 meses (generada automáticamente por el proceso SAP). Ambos gráficos son independientes en zoom y rotación.</div>
+                </li>
+            </ul>
+            <button class="btn" onclick="document.getElementById('help-modal').style.display='none'" style="width: 100%; padding: 12px; margin-top: 10px;">Entendido</button>
+        </div>
+    </div>
+
+    <div id="mapping-modal" class="modal">
+        <div class="modal-content">
+            <h3>Asignación Manual de Columnas</h3>
+            <div style="display: grid; gap: 15px; margin: 20px 0;">
+                <div><label>Nº de ECT:</label><select id="map-ect" style="width:100%"></select></div>
+                <div><label>Fecha:</label><select id="map-date" style="width:100%"></select></div>
+                <div><label>Código Proyecto:</label><select id="map-project" style="width:100%"></select></div>
+                <div><label>Descripción:</label><select id="map-desc" style="width:100%"></select></div>
+            </div>
+            <button class="btn" id="save-mapping" style="width: 100%">Confirmar y Procesar</button>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">Copiado al portapapeles</div>
+
+    <script>
+        const STATE = {
+            cleanData: [],
+            annualData: [],
+            annualProjectMap: {},
+            filteredData: [],
+            projectMap: {},
+            currentFilters: { project: '', month: '', startDate: '', endDate: '' },
+            vizF: { dim: '2D', type: 'bars', zoom: 1.0, panX: 0, panY: 0 },
+            vizG: { dim: '2D', type: 'bars', zoom: 1.0, panX: 0, panY: 0 },
+            page: 1, pageSize: 15,
+            theme: localStorage.getItem('theme') || 'dark',
+            view: 'home-view'
+        };
+
+        const STORAGE_KEY = 'zeco_dual_monitor_storage_v1';
+        const MAPPING_KEY = 'zeco_dual_monitor_mapping_v1';
+        const WINDCHILL_APP_URL = "https://windchill01.corp.knorr-bremse.com/Windchill/app/";
+        
+        const ALIASES = {
+            ect: ['Número modificación', 'Nº de ECT', 'Nº ECT', 'Numero ECT', 'ECT Number'],
+            date: ['Creado el', 'Fecha de la ECT', 'Fecha creación', 'Fecha'],
+            project: ['Número de proyecto', 'Proyecto', 'Project Number', 'Código Proyecto'],
+            desc: ['Descripción del proyecto BSC', 'Descripción proyecto', 'Project Description', 'Descripción']
+        };
+        const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+        const CHART_COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1e40af', '#1d4ed8', '#1e3a8a'];
+
+        const V3D = {
+            f: { scene: null, camera: null, renderer: null, raycaster: null, objects: [], animationId: null },
+            g: { scene: null, camera: null, renderer: null, raycaster: null, objects: [], animationId: null }
+        };
+
+        let mouse = new THREE.Vector2();
+        let isDragging = false, dragMode = 'rotate', prevMouse = { x: 0, y: 0 }, dragTarget = null;
+
+        function updateDateTime() {
+            const now = new Date();
+            const display = document.getElementById('datetime-display');
+            if (display) {
+                const dateStr = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                display.textContent = `${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} | ${timeStr}`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            setupEvents();
+            checkPersistence();
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+        });
+
+        function setupEvents() {
+            document.getElementById('help-btn').onclick = () => document.getElementById('help-modal').style.display='flex';
+            document.getElementById('theme-btn').onclick = toggleTheme;
+            document.getElementById('back-home-btn').onclick = () => showView('home-view');
+            document.getElementById('reset-storage').onclick = () => { if(confirm('¿Reiniciar aplicación y borrar memoria caché?')) { localStorage.clear(); location.reload(); } };
+            document.getElementById('fullscreen-btn').onclick = toggleFullscreen;
+            
+            document.getElementById('home-csv-input').onchange = handleFileUpload;
+            document.getElementById('quick-access-btn').onclick = () => showView('dashboard-view');
+            document.getElementById('new-file-btn').onclick = () => showView('upload-view');
+            document.getElementById('open-dashboard-card').onclick = () => STATE.cleanData.length ? showView('dashboard-view') : showView('upload-view');
+
+            document.getElementById('project-select').onchange = (e) => setFilter('project', e.target.value);
+            document.getElementById('date-start').onchange = (e) => setFilter('startDate', e.target.value);
+            document.getElementById('date-end').onchange = (e) => setFilter('endDate', e.target.value);
+
+            document.getElementById('clear-filters').onclick = clearFilters;
+            document.getElementById('copy-ids').onclick = () => copyToClipboard(STATE.filteredData.map(d => d.id).join('\n'));
+            document.getElementById('copy-rows').onclick = exportToExcel;
+
+            document.querySelectorAll('#dim-toggle-f .btn-toggle').forEach(btn => btn.onclick = () => updateVizMode(false, 'dim', btn));
+            document.querySelectorAll('#type-toggle-f .btn-toggle').forEach(btn => btn.onclick = () => updateVizMode(false, 'type', btn));
+            document.querySelectorAll('#dim-toggle-g .btn-toggle').forEach(btn => btn.onclick = () => updateVizMode(true, 'dim', btn));
+            document.querySelectorAll('#type-toggle-g .btn-toggle').forEach(btn => btn.onclick = () => updateVizMode(true, 'type', btn));
+
+            ['chart-host-f', 'chart-host-g'].forEach(id => {
+                const host = document.getElementById(id);
+                const isGlobal = id.includes('-g');
+                host.onmousedown = (e) => { 
+                    isDragging = true; dragTarget = isGlobal; 
+                    prevMouse = { x: e.clientX, y: e.clientY }; 
+                    dragMode = (e.button === 2) ? 'pan' : 'rotate'; 
+                };
+                host.oncontextmenu = (e) => e.preventDefault();
+            });
+
+            window.onmouseup = (e) => { 
+                if (isDragging && Math.abs(e.clientX - prevMouse.x) < 5) handleInteract(e, dragTarget);
+                isDragging = false; 
+            };
+            
+            window.onmousemove = (e) => {
+                if (!isDragging) { if (STATE.view === 'dashboard-view') checkHoverAll(e); return; }
+                const dx = e.clientX - prevMouse.x, dy = e.clientY - prevMouse.y;
+                const viz = dragTarget ? STATE.vizG : STATE.vizF;
+                const v3d = dragTarget ? V3D.g : V3D.f;
+                if (viz.dim === '2D') { viz.panX += dx; viz.panY += dy; renderChart(dragTarget); } 
+                else if (v3d.camera && v3d.scene) {
+                    if (dragMode === 'rotate') { v3d.scene.rotation.y += dx * 0.01; v3d.scene.rotation.x += dy * 0.01; }
+                    else { v3d.camera.position.x -= dx * 0.05 * viz.zoom; v3d.camera.position.y += dy * 0.05 * viz.zoom; }
+                }
+                prevMouse = { x: e.clientX, y: e.clientY };
+            };
+            window.onresize = () => { if (STATE.view === 'dashboard-view') { renderChart(false); renderChart(true); } };
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else document.exitFullscreen();
+        }
+
+        function updateVizMode(isGlobal, key, btn) {
+            btn.parentElement.querySelector('.active').classList.remove('active');
+            btn.classList.add('active');
+            const viz = isGlobal ? STATE.vizG : STATE.vizF;
+            viz[key] = btn.dataset.val;
+            saveLocal(); 
+            if (key === 'dim') resetView(isGlobal); else renderChart(isGlobal);
+        }
+
+        function showView(id) {
+            STATE.view = id;
+            ['home-view', 'upload-view', 'dashboard-view'].forEach(v => document.getElementById(v).classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+            document.getElementById('back-home-btn').classList.toggle('hidden', id === 'home-view');
+            document.getElementById('header-hvac-icon').classList.toggle('hidden', id !== 'dashboard-view');
+            const quickBtn = document.getElementById('quick-access-btn');
+            if (id === 'home-view' && STATE.cleanData.length > 0) quickBtn.classList.remove('hidden');
+            else quickBtn.classList.add('hidden');
+            if (id === 'dashboard-view') {
+                setupDashboardUI();
+                updateTogglesFromState(); 
+            }
+        }
+
+        function updateTogglesFromState() {
+            const configs = [
+                { id: 'dim-toggle-f', val: STATE.vizF.dim },
+                { id: 'type-toggle-f', val: STATE.vizF.type },
+                { id: 'dim-toggle-g', val: STATE.vizG.dim },
+                { id: 'type-toggle-g', val: STATE.vizG.type }
+            ];
+            configs.forEach(c => {
+                const group = document.getElementById(c.id);
+                if (group) {
+                    group.querySelectorAll('.btn-toggle').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.val === c.val);
+                    });
+                }
+            });
+        }
+
+        async function handleFileUpload(e) {
+            const file = e.target.files[0]; if (!file) return;
+            const text = await file.text();
+
+            // Separar seccion pendientes y seccion anual (---ANUAL---)
+            const sectionSplit = text.split(/\r?\n---ANUAL---\r?\n/);
+            const pendingText = sectionSplit[0];
+            const annualText = sectionSplit.length > 1 ? sectionSplit[1] : null;
+
+            const lines = pendingText.split(/\r?\n/).filter(l => l.trim() !== '');
+            if(!lines.length) return;
+            const sep = lines[0].includes(';') ? ';' : ',';
+            const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+            const raw = lines.slice(1).map(l => {
+                const vs = l.split(sep).map(v => v.trim().replace(/^"|"$/g, ''));
+                let o = {}; headers.forEach((h, i) => o[h] = vs[i]); return o;
+            });
+
+            // Parsear seccion anual si existe (misma estructura de columnas)
+            STATE._pendingAnnualRaw = null;
+            if (annualText) {
+                const aLines = annualText.split(/\r?\n/).filter(l => l.trim() !== '');
+                if (aLines.length > 1) {
+                    const aSep = aLines[0].includes(';') ? ';' : ',';
+                    const aHeaders = aLines[0].split(aSep).map(h => h.trim().replace(/^"|"$/g, ''));
+                    STATE._pendingAnnualRaw = aLines.slice(1).map(l => {
+                        const vs = l.split(aSep).map(v => v.trim().replace(/^"|"$/g, ''));
+                        let o = {}; aHeaders.forEach((h, i) => o[h] = vs[i]); return o;
+                    });
+                }
+            }
+
+            const savedRaw = localStorage.getItem(MAPPING_KEY);
+            const saved = savedRaw ? JSON.parse(savedRaw) : null;
+            const force = document.getElementById('force-mapping-check').checked;
+
+            if (!force && saved && saved.ect && headers.includes(saved.ect) && headers.includes(saved.date) && headers.includes(saved.project)) {
+                finalizeData(saved, raw);
+            } else {
+                let map = { ect: null, date: null, project: null, desc: null };
+                headers.forEach(h => {
+                    const l = h.toLowerCase();
+                    Object.keys(ALIASES).forEach(k => { if(ALIASES[k].some(a => a.toLowerCase() === l)) map[k] = h; });
+                });
+                showMappingModal(headers, map, raw);
+            }
+        }
+
+        function finalizeData(map, raw) {
+            localStorage.setItem(MAPPING_KEY, JSON.stringify(map));
+            const ects = new Map(), projs = {};
+            raw.forEach(r => {
+                const id = r[map.ect]; if (!id) return;
+                const d = parseDate(r[map.date]), p = r[map.project] || 'S/N', ds = r[map.desc] || '';
+                if (p !== 'S/N' && ds) projs[p] = ds;
+                const item = { id, fecha: d, fechaStr: r[map.date], proyecto: p, monthKey: d ? `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` : 'Sin fecha', monthSort: d ? d.getFullYear() * 100 + d.getMonth() : 0 };
+                if (!ects.has(id) || (d && ects.get(id).fecha < d)) ects.set(id, item);
+            });
+            STATE.cleanData = Array.from(ects.values()); STATE.projectMap = projs;
+            if (STATE._pendingAnnualRaw) {
+                finalizeAnnualData(map, STATE._pendingAnnualRaw);
+                STATE._pendingAnnualRaw = null;
+            }
+            saveLocal(); showView('dashboard-view');
+        }
+
+        function finalizeAnnualData(map, raw) {
+            if (!raw || !raw.length) return;
+            const ects = new Map(), projs = {};
+            raw.forEach(r => {
+                const id = r[map.ect]; if (!id) return;
+                const d = parseDate(r[map.date]), p = r[map.project] || 'S/N', ds = r[map.desc] || '';
+                if (p !== 'S/N' && ds) projs[p] = ds;
+                const item = { id, fecha: d, fechaStr: r[map.date], proyecto: p, monthKey: d ? `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` : 'Sin fecha', monthSort: d ? d.getFullYear() * 100 + d.getMonth() : 0 };
+                if (!ects.has(id) || (d && ects.get(id).fecha < d)) ects.set(id, item);
+            });
+            STATE.annualData = Array.from(ects.values());
+            STATE.annualProjectMap = projs;
+        }
+
+        function setupDashboardUI() {
+            const sel = document.getElementById('project-select');
+            sel.innerHTML = '<option value="">Filtrado por proyecto</option>';
+            [...new Set(STATE.cleanData.map(x => x.proyecto))].sort().forEach(p => {
+                const o = document.createElement('option'); o.value = p; 
+                o.textContent = `${p}${STATE.projectMap[p] ? ' - ' + STATE.projectMap[p] : ''}`;
+                sel.appendChild(o);
+            });
+            applyFilters();
+            renderChart(true);
+        }
+
+        function renderChart(isGlobal) {
+            const suffix = isGlobal ? 'g' : 'f';
+            const viz = isGlobal ? STATE.vizG : STATE.vizF;
+            const host = document.getElementById(`chart-host-${suffix}`);
+            if (!host || host.offsetParent === null) return;
+            const v3d = isGlobal ? V3D.g : V3D.f;
+            if (v3d.animationId) cancelAnimationFrame(v3d.animationId);
+            const controls = host.querySelector('.zoom-controls');
+            host.innerHTML = ''; if (controls) host.appendChild(controls);
+            if (viz.dim === '2D') render2D(isGlobal, host, viz);
+            else render3D(isGlobal, host, viz);
+        }
+
+        function getChartData(isGlobal) {
+            const data = isGlobal
+                ? (STATE.annualData.length > 0 ? STATE.annualData : STATE.cleanData)
+                : STATE.filteredData;
+            const g = {}; 
+            data.forEach(x => { if (!g[x.monthKey]) g[x.monthKey] = { count: 0, sort: x.monthSort }; g[x.monthKey].count++; });
+            return Object.keys(g).sort((a,b)=>g[a].sort - g[b].sort).map(m => ({ month: m, count: g[m].count }));
+        }
+
+        function render2D(isGlobal, host, viz) {
+            const data = getChartData(isGlobal); if (!data.length) return;
+            const w = host.clientWidth, h = host.clientHeight;
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            const vW = w * viz.zoom, vH = h * viz.zoom;
+            svg.setAttribute("viewBox", `${(w-vW)/2 - viz.panX - 20} ${(h-vH)/2 - viz.panY - 20} ${vW + 40} ${vH + 120}`);
+            if (viz.type === 'circular') {
+                const cX = w/2, cY = h/2, r = Math.min(w,h)/4.5;
+                let start = 0; const total = data.reduce((a,b)=>a+b.count,0);
+                data.forEach((d, i) => {
+                    const ang = (d.count/total)*Math.PI*2;
+                    const isSel = !isGlobal && STATE.currentFilters.month === d.month;
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", `M ${cX} ${cY} L ${cX+Math.cos(start)*r} ${cY+Math.sin(start)*r} A ${r} ${r} 0 ${ang>Math.PI?1:0} 1 ${cX+Math.cos(start+ang)*r} ${cY+Math.sin(start+ang)*r} Z`);
+                    path.setAttribute("fill", isSel ? "var(--accent)" : CHART_COLORS[i%CHART_COLORS.length]);
+                    path.setAttribute("stroke", "white"); path.style.cursor = "pointer";
+                    if(!isGlobal) path.onclick = () => setFilter('month', d.month);
+                    path.onmouseenter = (e) => showTooltip(e, `<strong>${d.month}</strong><br>${d.count} ECTs`);
+                    path.onmouseleave = hideTooltip;
+                    svg.appendChild(path);
+                    const mid = start + ang/2;
+                    const lx = cX + Math.cos(mid)*(r*1.3), ly = cY + Math.sin(mid)*(r*1.3);
+                    const lbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    lbl.setAttribute("x", lx); lbl.setAttribute("y", ly);
+                    lbl.setAttribute("text-anchor", lx > cX ? "start" : "end");
+                    lbl.setAttribute("dominant-baseline", "middle");
+                    lbl.setAttribute("fill", "var(--text-main)");
+                    lbl.style.fontWeight = "600";
+                    lbl.textContent = d.month;
+                    svg.appendChild(lbl);
+                    start += ang;
+                });
+            } else {
+                const pad = 80, cW = w - pad*2, cH = h - pad*2;
+                const max = Math.max(...data.map(d=>d.count), 1), step = cW/data.length;
+                data.forEach((d, i) => {
+                    const x = pad+i*step+step/2, isSel = !isGlobal && STATE.currentFilters.month === d.month;
+                    if (viz.type === 'bars') {
+                        const bh = (d.count/max)*cH;
+                        const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                        r.setAttribute("x", pad+i*step+4); r.setAttribute("y", h-pad-bh); r.setAttribute("width", step-8); r.setAttribute("height", bh);
+                        r.setAttribute("fill", isSel ? "var(--accent)" : (isGlobal ? "var(--accent)" : "var(--primary)"));
+                        r.style.cursor = "pointer";
+                        if(!isGlobal) r.onclick = () => setFilter('month', d.month);
+                        r.onmouseenter = (e) => showTooltip(e, `<strong>${d.month}</strong><br>${d.count} ECTs`);
+                        r.onmouseleave = hideTooltip;
+                        svg.appendChild(r);
+                    }
+                    const lbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    lbl.setAttribute("x", x); lbl.setAttribute("y", h-pad+15); lbl.setAttribute("text-anchor", "end");
+                    lbl.setAttribute("transform", `rotate(-45, ${x}, ${h-pad+15})`);
+                    lbl.textContent = d.month; svg.appendChild(lbl);
+                });
+                if (viz.type === 'lines' && data.length > 1) {
+                    const p = data.map((d,i)=>`${i===0?'M':'L'} ${pad+i*step+step/2} ${h-pad-(d.count/max)*cH}`).join(' ');
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", p); path.setAttribute("fill", "none"); path.setAttribute("stroke", isGlobal ? "var(--accent)" : "var(--primary)"); path.setAttribute("stroke-width", "2.5");
+                    svg.insertBefore(path, svg.firstChild);
+                }
+            }
+            host.appendChild(svg);
+        }
+
+        function render3D(isGlobal, host, viz) {
+            const data = getChartData(isGlobal); if (!data.length) return;
+            const v3d = isGlobal ? V3D.g : V3D.f;
+            v3d.scene = new THREE.Scene(); v3d.scene.background = new THREE.Color(STATE.theme === 'dark' ? 0x0a0f1d : 0xfdfdfd);
+            v3d.camera = new THREE.PerspectiveCamera(45, host.clientWidth / host.clientHeight, 0.1, 1000);
+            v3d.renderer = new THREE.WebGLRenderer({ antialias: true }); 
+            v3d.renderer.setSize(host.clientWidth, host.clientHeight);
+            host.appendChild(v3d.renderer.domElement);
+            v3d.objects = []; v3d.raycaster = new THREE.Raycaster();
+            v3d.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            v3d.scene.add(new THREE.DirectionalLight(0xffffff, 0.5));
+            const max = Math.max(...data.map(d=>d.count), 1);
+            if (viz.type === 'circular') {
+                v3d.camera.position.set(0, 35, 45 * viz.zoom); v3d.camera.lookAt(0,0,0);
+                const total = data.reduce((a,b)=>a+b.count,0); 
+                let currentAngle = 0;
+                data.forEach((d, i) => {
+                    const ang = (d.count / total) * Math.PI * 2;
+                    const thetaStart = -currentAngle - ang;
+                    const isSel = !isGlobal && STATE.currentFilters.month === d.month;
+                    const geo = new THREE.CylinderGeometry(15, 15, 2, 32, 1, false, thetaStart, ang);
+                    const mat = new THREE.MeshStandardMaterial({ color: isSel ? 0x10b981 : CHART_COLORS[i % CHART_COLORS.length], transparent: true, opacity: (STATE.currentFilters.month && !isSel && !isGlobal) ? 0.3 : 1.0 });
+                    const slice = new THREE.Mesh(geo, mat);
+                    slice.userData = { month: d.month, count: d.count, isGlobal };
+                    v3d.scene.add(slice); v3d.objects.push(slice);
+                    const mid = thetaStart + ang/2;
+                    const lx = Math.cos(mid)*20, lz = Math.sin(mid)*20;
+                    const spr = createTextSprite(d.month, 0);
+                    spr.position.set(lx, 2, lz); spr.scale.set(6, 1.5, 1);
+                    v3d.scene.add(spr);
+                    currentAngle += ang;
+                });
+            } else {
+                v3d.camera.position.set(0, 20, 60 * viz.zoom); v3d.camera.lookAt(0,5,0);
+                const startX = -(data.length * 5) / 2;
+                const axisMat = new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.25 });
+                for(let i=0; i<=4; i++) {
+                    const y = (i/4)*18; 
+                    const s = createTextSprite(Math.round((i/4)*max).toString(), 0);
+                    s.position.set(startX-8, y, 0); s.scale.set(6, 1.5, 1); v3d.scene.add(s);
+                    const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(startX-2, y, 0), new THREE.Vector3(startX + data.length*5, y, 0)]);
+                    v3d.scene.add(new THREE.Line(lineGeo, axisMat));
+                }
+                const pts = [];
+                data.forEach((d, i) => {
+                    const h = (d.count/max)*18, x = startX+i*5;
+                    const isSel = !isGlobal && STATE.currentFilters.month === d.month;
+                    const mat = new THREE.MeshStandardMaterial({ color: isSel ? 0x10b981 : (isGlobal ? 0x10b981 : 0x2563eb), transparent: true, opacity: (STATE.currentFilters.month && !isSel && !isGlobal) ? 0.3 : 1.0 });
+                    if (viz.type === 'bars') {
+                        const bar = new THREE.Mesh(new THREE.BoxGeometry(3, h, 3), mat);
+                        bar.position.set(x, h/2, 0); bar.userData = { month: d.month, count: d.count, isGlobal };
+                        v3d.scene.add(bar); v3d.objects.push(bar);
+                    } else if (viz.type === 'lines') {
+                        const sph = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), mat);
+                        sph.position.set(x, h, 0); sph.userData = { month: d.month, count: d.count, isGlobal };
+                        v3d.scene.add(sph); v3d.objects.push(sph);
+                        pts.push(new THREE.Vector3(x, h, 0));
+                    }
+                    const spr = createTextSprite(d.month, -Math.PI/4); 
+                    spr.position.set(x, -6, 2); v3d.scene.add(spr);
+                });
+                if (viz.type === 'lines' && pts.length > 1) {
+                    const lGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                    v3d.scene.add(new THREE.Line(lGeo, new THREE.LineBasicMaterial({ color: isGlobal ? 0x10b981 : 0x2563eb, opacity: 0.5, transparent: true })));
+                }
+            }
+            const animate = () => { v3d.animationId = requestAnimationFrame(animate); v3d.renderer.render(v3d.scene, v3d.camera); };
+            animate();
+        }
+
+        function createTextSprite(t, rotationZ = 0) {
+            const c = document.createElement('canvas'); const ctx = c.getContext('2d');
+            c.width = 512; c.height = 128;
+            ctx.fillStyle = STATE.theme === 'dark' ? '#f1f5f9' : '#1e293b';
+            ctx.font = 'bold 52px Segoe UI, Arial';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(t, 256, 64);
+            const tex = new THREE.CanvasTexture(c);
+            const mat = new THREE.SpriteMaterial({ map: tex, rotation: rotationZ });
+            const spr = new THREE.Sprite(mat);
+            spr.scale.set(10, 2.5, 1);
+            return spr;
+        }
+
+        function checkHoverAll(e) {
+            hideTooltip(); document.body.style.cursor = 'default';
+            [V3D.f, V3D.g].forEach(v => {
+                if (!v.renderer || !v.renderer.domElement || !v.camera) return;
+                const host = v.renderer.domElement.parentElement;
+                if (!host) return;
+                const rect = host.getBoundingClientRect();
+                const mx = ((e.clientX - rect.left)/rect.width)*2-1;
+                const my = -((e.clientY - rect.top)/rect.height)*2+1;
+                if (mx < -1 || mx > 1 || my < -1 || my > 1) return;
+                v.raycaster.setFromCamera({x: mx, y: my}, v.camera);
+                const hits = v.raycaster.intersectObjects(v.objects);
+                if (hits.length > 0) {
+                    const o = hits[0].object;
+                    showTooltip(e, `<strong>${o.userData.month}</strong><br>${o.userData.count} ECTs`);
+                    document.body.style.cursor = 'pointer';
+                }
+            });
+        }
+
+        function handleInteract(e, isGlobal) {
+            const v = isGlobal ? V3D.g : V3D.f;
+            if (!v.renderer || !v.renderer.domElement || isGlobal) return;
+            const rect = v.renderer.domElement.getBoundingClientRect();
+            const mx = ((e.clientX - rect.left)/rect.width)*2-1;
+            const my = -((e.clientY - rect.top)/rect.height)*2+1;
+            v.raycaster.setFromCamera({x: mx, y: my}, v.camera);
+            const hits = v.raycaster.intersectObjects(v.objects);
+            if (hits.length > 0) setFilter('month', hits[0].object.userData.month);
+        }
+
+        function applyFilters() {
+            const { project, month, startDate, endDate } = STATE.currentFilters;
+            const startLimit = startDate ? new Date(startDate) : null;
+            const endLimit = endDate ? new Date(endDate) : null;
+            
+            if (startLimit) startLimit.setHours(0,0,0,0);
+            if (endLimit) endLimit.setHours(23,59,59,999);
+
+            STATE.filteredData = STATE.cleanData.filter(x => {
+                const matchProject = !project || x.proyecto === project;
+                const matchMonth = !month || x.monthKey === month;
+                
+                let matchDate = true;
+                if (x.fecha) {
+                    if (startLimit && x.fecha < startLimit) matchDate = false;
+                    if (endLimit && x.fecha > endLimit) matchDate = false;
+                } else if (startLimit || endLimit) {
+                    matchDate = false;
+                }
+
+                return matchProject && matchMonth && matchDate;
+            });
+
+            renderStats(); 
+            renderChart(false); 
+            renderTable(); 
+            renderPills();
+        }
+
+        function setFilter(type, val) { 
+            STATE.currentFilters[type] = (STATE.currentFilters[type] === val && type === 'month') ? '' : val; 
+            STATE.page = 1; 
+            applyFilters(); 
+        }
+        
+        function clearFilters() { 
+            STATE.currentFilters = { project: '', month: '', startDate: '', endDate: '' }; 
+            document.getElementById('project-select').value = '';
+            document.getElementById('date-start').value = '';
+            document.getElementById('date-end').value = '';
+            applyFilters(); 
+        }
+
+        function renderStats() {
+            const global = STATE.cleanData;
+            document.getElementById('stat-total-global').textContent = global.length.toLocaleString();
+            if (global.length) {
+                const gMs = {}, gPs = {};
+                global.forEach(x => { gMs[x.monthKey] = (gMs[x.monthKey] || 0) + 1; gPs[x.proyecto] = (gPs[x.proyecto] || 0) + 1; });
+                document.getElementById('stat-peak-month-global').textContent = Object.keys(gMs).reduce((a,b)=>gMs[a]>gMs[b]?a:b, '-');
+                const gPp = Object.keys(gPs).reduce((a,b)=>gPs[a]>gPs[b]?a:b, '-');
+                document.getElementById('stat-peak-project-global').textContent = gPp;
+                document.getElementById('stat-peak-project-desc-global').textContent = STATE.projectMap[gPp] || '-';
+            }
+            const local = STATE.filteredData;
+            document.getElementById('stat-total-local').textContent = local.length.toLocaleString();
+            document.getElementById('stat-selected-month').textContent = STATE.currentFilters.month || '(Todos)';
+        }
+
+        function renderTable() {
+            const tb = document.getElementById('table-body'); if(!tb) return;
+            tb.innerHTML = ''; const start = (STATE.page - 1) * STATE.pageSize;
+            STATE.filteredData.slice(start, start + STATE.pageSize).forEach(x => {
+                const tr = document.createElement('tr');
+                const desc = STATE.projectMap[x.proyecto] || '-';
+                tr.innerHTML = `
+                    <td>
+                        <b>${x.id}</b>
+                        <a onclick="copiarYAbrirWindchill(event, '${x.id}')" class="windchill-link" title="Copiar ID y abrir Windchill">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                <polyline points="15 3 21 3 21 9"/>
+                                <line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                        </a>
+                    </td>
+                    <td>${x.fechaStr}</td><td>${x.proyecto}</td><td><small>${desc}</small></td>`;
+                tb.appendChild(tr);
+            });
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const nav = document.getElementById('pagination'); if(!nav) return;
+            nav.innerHTML = ''; const pgs = Math.ceil(STATE.filteredData.length / STATE.pageSize);
+            if (pgs <= 1) return;
+            for (let i = 1; i <= Math.min(pgs, 5); i++) {
+                const b = document.createElement('button'); b.className = `page-btn ${i === STATE.page ? 'active' : ''}`;
+                b.textContent = i; b.onclick = () => { STATE.page = i; renderTable(); }; nav.appendChild(b);
+            }
+        }
+
+        function renderPills() {
+            const h = document.getElementById('filter-pills'); if(!h) return;
+            h.innerHTML = ''; const { project, month, startDate, endDate } = STATE.currentFilters;
+            if (project) h.innerHTML += `<div class="pill">Proyecto: ${project} <span onclick="setFilter('project', '')">×</span></div>`;
+            if (month) h.innerHTML += `<div class="pill accent">Mes: ${month} <span onclick="setFilter('month', '')">×</span></div>`;
+            if (startDate || endDate) {
+                const rangeStr = `${startDate || '...'} a ${endDate || '...'}`;
+                h.innerHTML += `<div class="pill" style="background:var(--sap-gold)">Fecha: ${rangeStr} <span onclick="setFilter('startDate', ''); setFilter('endDate', ''); document.getElementById('date-start').value=''; document.getElementById('date-end').value='';">×</span></div>`;
+            }
+        }
+
+        function toggleTheme() { 
+            STATE.theme = STATE.theme === 'dark' ? 'light' : 'dark'; 
+            localStorage.setItem('theme', STATE.theme); 
+            saveLocal(); 
+            initTheme(); 
+            renderChart(false); 
+            renderChart(true); 
+        }
+        function initTheme() { document.body.setAttribute('data-theme', STATE.theme); }
+        function adjustZoom(isGlobal, f) { const viz = isGlobal ? STATE.vizG : STATE.vizF; viz.zoom *= f; renderChart(isGlobal); }
+        function resetView(isGlobal) { 
+            const viz = isGlobal ? STATE.vizG : STATE.vizF; viz.zoom = 1.0; viz.panX = 0; viz.panY = 0; 
+            const v3d = isGlobal ? V3D.g : V3D.f; if(v3d.scene) v3d.scene.rotation.set(0,0,0);
+            renderChart(isGlobal); 
+        }
+
+        function copyToClipboard(t) {
+            const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+            ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+            const ts = document.getElementById('toast'); ts.innerHTML = "ID copiado al portapapeles"; ts.classList.add('show');
+            setTimeout(() => ts.classList.remove('show'), 2000);
+        }
+
+        function exportToExcel() {
+            const BOM = "\uFEFF";
+            const header = "Nº ECT;Fecha;Proyecto;Descripción\n";
+            const body = STATE.filteredData.map(x => {
+                const desc = (STATE.projectMap[x.proyecto] || '-').replace(/;/g, ',');
+                return `${x.id};${x.fechaStr};${x.proyecto};${desc}`;
+            }).join('\n');
+            const content = BOM + header + body;
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const date = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `Exportacion_ECTs_${date}.csv`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            const ts = document.getElementById('toast'); ts.innerHTML = "CSV generado para Excel con éxito"; ts.classList.add('show');
+            setTimeout(() => ts.classList.remove('show'), 2000);
+        }
+
+        function copiarYAbrirWindchill(event, id) { event.stopPropagation(); copyToClipboard(id); window.open(WINDCHILL_APP_URL, '_blank'); }
+        
+        function saveLocal() { 
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
+                cleanData: STATE.cleanData, 
+                projectMap: STATE.projectMap,
+                annualData: STATE.annualData,
+                annualProjectMap: STATE.annualProjectMap,
+                vizF: { dim: STATE.vizF.dim, type: STATE.vizF.type }, 
+                vizG: { dim: STATE.vizG.dim, type: STATE.vizG.type }, 
+                theme: STATE.theme 
+            })); 
+        }
+
+        function checkPersistence() {
+            const s = localStorage.getItem(STORAGE_KEY);
+            if (s) { 
+                const d = JSON.parse(s); 
+                STATE.cleanData = d.cleanData.map(x => ({...x, fecha: x.fecha ? new Date(x.fecha) : null})); 
+                STATE.projectMap = d.projectMap;
+                if (d.annualData) STATE.annualData = d.annualData.map(x => ({...x, fecha: x.fecha ? new Date(x.fecha) : null}));
+                if (d.annualProjectMap) STATE.annualProjectMap = d.annualProjectMap;
+                
+                // Carga selectiva: Solo dim y type, ignorar zoom/pan
+                if (d.vizF) {
+                    STATE.vizF.dim = d.vizF.dim || '2D';
+                    STATE.vizF.type = d.vizF.type || 'bars';
+                    STATE.vizF.zoom = 1.0; STATE.vizF.panX = 0; STATE.vizF.panY = 0;
+                }
+                if (d.vizG) {
+                    STATE.vizG.dim = d.vizG.dim || '2D';
+                    STATE.vizG.type = d.vizG.type || 'bars';
+                    STATE.vizG.zoom = 1.0; STATE.vizG.panX = 0; STATE.vizG.panY = 0;
+                }
+                if (d.theme) STATE.theme = d.theme;
+            }
+            initTheme(); 
+            showView('home-view');
+        }
+
+        function parseDate(s) {
+            if (!s) return null; const c = s.replace(/[^\d\/\-]/g, '').trim();
+            let d, m, y;
+            if (c.includes('/')) { const p = c.split('/'); if(p[0].length === 4) [y, m, d] = p; else [d, m, y] = p; }
+            else if (c.includes('-')) { const p = c.split('-'); if(p[0].length === 4) [y, m, d] = p; else [d, m, y] = p; }
+            return new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+        }
+
+        function showMappingModal(headers, current, raw) {
+            const modal = document.getElementById('mapping-modal');
+            const fs = [{ id: 'map-ect', k: 'ect' }, { id: 'map-date', k: 'date' }, { id: 'map-project', k: 'project' }, { id: 'map-desc', k: 'desc' }];
+            fs.forEach(f => {
+                const s = document.getElementById(f.id); s.innerHTML = '<option value="">-- Ignorar --</option>';
+                headers.forEach(h => { const o = document.createElement('option'); o.value = h; o.textContent = h; if (current[f.k] === h) o.selected = true; s.appendChild(o); });
+            });
+            modal.style.display = 'flex';
+            document.getElementById('save-mapping').onclick = () => {
+                const m = { ect: document.getElementById('map-ect').value, date: document.getElementById('map-date').value, project: document.getElementById('map-project').value, desc: document.getElementById('map-desc').value };
+                modal.style.display = 'none'; finalizeData(m, raw);
+            };
+        }
+
+        function showTooltip(e, content) {
+            const el = document.getElementById('custom-tooltip');
+            el.style.display = 'block'; el.innerHTML = content;
+            el.style.left = (e.clientX + 15) + 'px'; el.style.top = (e.clientY + 15) + 'px';
+        }
+        function hideTooltip() { document.getElementById('custom-tooltip').style.display = 'none'; }
+    </script>
+</body>
+</html>
