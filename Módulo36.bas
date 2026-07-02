@@ -48,12 +48,29 @@ Sub MonitorZeco()
         Exit Sub
     End If
 
-    ' 4. ESPERA ACTIVA: Pausamos 10 segundos.
-    ' Esto da tiempo a que el comando automatico de SAP abra los archivos en Excel.
-    application.Wait (Now + TimeValue("0:00:10"))
+    ' 4. ESPERA ACTIVA con DoEvents: 10 segundos manteniendo Excel responsivo.
+    ' application.Wait bloquea el bucle de mensajes e impide que SAP abra los archivos.
+    ' Con DoEvents en bucle, Excel procesa mensajes pendientes y SAP puede completar la apertura.
+    Dim tFin As Date
+    tFin = Now + TimeValue("0:00:10")
+    Do While Now < tFin
+        DoEvents
+    Loop
     
     ' 5. CIERRE DEFINITIVO: Ahora que SAP ya los ha abierto, los cerramos por fuerza.
     Call CerrarLibrosSolo(pathXLS, pathXLS_Rep, pathXLS_Anual, pathXLS_Rep_Anual)
+
+    ' 6. CIERRE DE CSV: Cerrar cualquier archivo CSV que haya quedado abierto en Excel.
+    Dim wbCSV As Workbook
+    application.DisplayAlerts = False
+    On Error Resume Next
+    For Each wbCSV In Workbooks
+        If LCase(Right(wbCSV.Name, 4)) = ".csv" Then
+            wbCSV.Close SaveChanges:=False
+        End If
+    Next wbCSV
+    application.DisplayAlerts = True
+    On Error GoTo 0
 End Sub
 
 Private Sub ExtraerDatosSAP(pathXLS As String, pathXLS_Rep As String, pathCSV As String)
@@ -290,24 +307,47 @@ Private Function EsperarArchivo(ruta As String, segundos As Integer) As Boolean
 End Function
 
 Private Sub LimpiarEntorno(f1 As String, f2 As String, Optional f3 As String = "", Optional f4 As String = "")
-    Dim n1 As String, n2 As String, n3 As String, n4 As String
-    Dim wb As Workbook
-    n1 = Mid(f1, InStrRev(f1, "\") + 1)
-    n2 = Mid(f2, InStrRev(f2, "\") + 1)
-    If f3 <> "" Then n3 = Mid(f3, InStrRev(f3, "\") + 1)
-    If f4 <> "" Then n4 = Mid(f4, InStrRev(f4, "\") + 1)
-    
+    Dim archivos(3) As String
+    Dim i As Integer, j As Integer
+    Dim wbObj As Object
+    Dim n As String
+
+    archivos(0) = f1
+    archivos(1) = f2
+    archivos(2) = f3
+    archivos(3) = f4
+
+    application.DisplayAlerts = False
     On Error Resume Next
-    ' Cierre de libros abiertos iterando la coleccion para asegurar el desbloqueo
-    For Each wb In Workbooks
-        If wb.Name = n1 Or wb.Name = n2 Then wb.Close SaveChanges:=False
-        If f3 <> "" And wb.Name = n3 Then wb.Close SaveChanges:=False
-        If f4 <> "" And wb.Name = n4 Then wb.Close SaveChanges:=False
-    Next wb
-    
+
+    ' Cierre robusto: iteracion inversa + GetObject para otras instancias de Excel
+    For i = 0 To 3
+        If archivos(i) <> "" Then
+            n = Mid(archivos(i), InStrRev(archivos(i), "\") + 1)
+
+            ' Metodo 1: iteracion inversa sobre la instancia actual
+            For j = Workbooks.Count To 1 Step -1
+                If Workbooks(j).Name = n Then
+                    Workbooks(j).Close SaveChanges:=False
+                End If
+            Next j
+
+            ' Metodo 2: GetObject para cerrar en cualquier otra instancia de Excel
+            Err.Clear
+            Set wbObj = GetObject(archivos(i))
+            If Not wbObj Is Nothing Then
+                wbObj.Close False
+                Set wbObj = Nothing
+            End If
+            Err.Clear
+        End If
+    Next i
+
+    application.DisplayAlerts = True
     DoEvents
-    
+
     ' Eliminacion fisica de archivos en la carpeta TEMP
+    On Error Resume Next
     If Dir(f1) <> "" Then Kill f1
     If Dir(f2) <> "" Then Kill f2
     If f3 <> "" And Dir(f3) <> "" Then Kill f3
@@ -316,21 +356,41 @@ Private Sub LimpiarEntorno(f1 As String, f2 As String, Optional f3 As String = "
 End Sub
 
 Private Sub CerrarLibrosSolo(f1 As String, f2 As String, Optional f3 As String = "", Optional f4 As String = "")
-    Dim n1 As String, n2 As String, n3 As String, n4 As String
-    Dim wb As Workbook
-    n1 = Mid(f1, InStrRev(f1, "\") + 1)
-    n2 = Mid(f2, InStrRev(f2, "\") + 1)
-    If f3 <> "" Then n3 = Mid(f3, InStrRev(f3, "\") + 1)
-    If f4 <> "" Then n4 = Mid(f4, InStrRev(f4, "\") + 1)
-    
-    On Error Resume Next
+    Dim archivos(3) As String
+    Dim i As Integer, j As Integer
+    Dim wbObj As Object
+    Dim n As String
+
+    archivos(0) = f1
+    archivos(1) = f2
+    archivos(2) = f3
+    archivos(3) = f4
+
     application.DisplayAlerts = False
-    ' Recorremos la coleccion de libros actuales para cerrar los que SAP acaba de abrir
-    For Each wb In Workbooks
-        If wb.Name = n1 Or wb.Name = n2 Then wb.Close SaveChanges:=False
-        If f3 <> "" And wb.Name = n3 Then wb.Close SaveChanges:=False
-        If f4 <> "" And wb.Name = n4 Then wb.Close SaveChanges:=False
-    Next wb
+    On Error Resume Next
+
+    For i = 0 To 3
+        If archivos(i) <> "" Then
+            n = Mid(archivos(i), InStrRev(archivos(i), "\") + 1)
+
+            ' Metodo 1: iteracion inversa sobre la instancia actual (segura al cerrar durante el bucle)
+            For j = Workbooks.Count To 1 Step -1
+                If Workbooks(j).Name = n Then
+                    Workbooks(j).Close SaveChanges:=False
+                End If
+            Next j
+
+            ' Metodo 2: GetObject para cerrar el archivo en cualquier otra instancia de Excel
+            Err.Clear
+            Set wbObj = GetObject(archivos(i))
+            If Not wbObj Is Nothing Then
+                wbObj.Close False
+                Set wbObj = Nothing
+            End If
+            Err.Clear
+        End If
+    Next i
+
     application.DisplayAlerts = True
     DoEvents
     On Error GoTo 0
