@@ -305,6 +305,10 @@
         <div class="dashboard-grid">
             <div class="section-label">Métricas Globales</div>
             <div class="card highlight">
+                <div class="card-title">ECTs (últimos 12 meses)</div>
+                <div class="card-value" id="stat-total-anual">0</div>
+            </div>
+            <div class="card highlight">
                 <div class="card-title">ECTs Pendientes</div>
                 <div class="card-value" id="stat-total-global">0</div>
             </div>
@@ -312,10 +316,11 @@
                 <div class="card-title">Pico Temporal</div>
                 <div class="card-value" id="stat-peak-month-global">-</div>
             </div>
-            <div class="card highlight">
-                <div class="card-title">Proyecto Crítico</div>
+            <div class="card highlight" id="card-proyecto-critico" onclick="showRankingModal()" style="cursor:pointer;" title="Ver ranking completo de proyectos">
+                <div class="card-title">Proyecto Crítico <span style="font-size:0.65rem;opacity:0.6;">&#9654; ver ranking</span></div>
                 <div class="card-value" id="stat-peak-project-global">-</div>
                 <div id="stat-peak-project-desc-global" class="card-subtext"></div>
+                <div style="font-size:0.68rem;color:var(--primary);margin-top:5px;" id="stat-peak-project-count"></div>
             </div>
 
             <div class="section-label">Filtros Activos</div>
@@ -431,6 +436,15 @@
                 </table>
             </div>
             <div id="pagination" class="pagination"></div>
+        </div>
+    </div>
+
+    <!-- Modal ranking proyectos -->
+    <div id="ranking-modal" class="modal" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-content" style="max-width:480px;">
+            <h3 style="border-bottom:2px solid var(--primary);padding-bottom:10px;margin-bottom:18px;">Proyectos por ECTs Pendientes</h3>
+            <div id="ranking-modal-body" style="display:grid;gap:6px;"></div>
+            <button class="btn" onclick="document.getElementById('ranking-modal').style.display='none'" style="width:100%;padding:12px;margin-top:18px;">Cerrar</button>
         </div>
     </div>
 
@@ -972,17 +986,39 @@
         function renderStats() {
             const global = STATE.cleanData;
             document.getElementById('stat-total-global').textContent = global.length.toLocaleString();
+            document.getElementById('stat-total-anual').textContent = (STATE.annualData.length || 0).toLocaleString();
             if (global.length) {
                 const gMs = {}, gPs = {};
                 global.forEach(x => { gMs[x.monthKey] = (gMs[x.monthKey] || 0) + 1; gPs[x.proyecto] = (gPs[x.proyecto] || 0) + 1; });
                 document.getElementById('stat-peak-month-global').textContent = Object.keys(gMs).reduce((a,b)=>gMs[a]>gMs[b]?a:b, '-');
-                const gPp = Object.keys(gPs).reduce((a,b)=>gPs[a]>gPs[b]?a:b, '-');
-                document.getElementById('stat-peak-project-global').textContent = gPp;
-                document.getElementById('stat-peak-project-desc-global').textContent = STATE.projectMap[gPp] || '-';
+                const top1 = Object.keys(gPs).sort((a,b) => gPs[b] - gPs[a])[0] || '-';
+                document.getElementById('stat-peak-project-global').textContent = top1;
+                document.getElementById('stat-peak-project-desc-global').textContent = STATE.projectMap[top1] || '';
+                document.getElementById('stat-peak-project-count').textContent = top1 !== '-' ? gPs[top1] + ' ECTs pendientes' : '';
+                // Guardar ranking completo para el modal
+                STATE._projectRanking = Object.keys(gPs).sort((a,b) => gPs[b] - gPs[a]).map(p => ({ p, count: gPs[p], desc: STATE.projectMap[p] || '' }));
             }
             const local = STATE.filteredData;
             document.getElementById('stat-total-local').textContent = local.length.toLocaleString();
             document.getElementById('stat-selected-month').textContent = STATE.currentFilters.month || '(Todos)';
+        }
+
+        function showRankingModal() {
+            const ranking = STATE._projectRanking || [];
+            const body = document.getElementById('ranking-modal-body');
+            if (!ranking.length) { body.innerHTML = '<p style="color:var(--text-muted)">Sin datos</p>'; }
+            else {
+                body.innerHTML = ranking.map((r, i) => `
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:${ i===0?'rgba(37,99,235,0.1)':'var(--bg-color)'};border:1px solid var(--border);">
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);width:22px;text-align:right;flex-shrink:0;">${i+1}</div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:700;font-size:0.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.desc}">${r.desc || r.p}</div>
+                            <div style="font-size:0.7rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.p}</div>
+                        </div>
+                        <div style="font-weight:700;font-size:1rem;color:var(--primary);flex-shrink:0;">${r.count}</div>
+                    </div>`).join('');
+            }
+            document.getElementById('ranking-modal').style.display = 'flex';
         }
 
         function renderTable() {
