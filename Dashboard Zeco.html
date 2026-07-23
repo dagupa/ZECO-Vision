@@ -220,7 +220,7 @@
 
     <header>
         <div class="header-info" style="flex-direction:row;align-items:center;gap:10px;">
-            <img id="header-logo" src="Logos/Logo-oscuro.png" alt="Logo"
+            <img id="header-logo" src="Logos/logo-oscuro.png" alt="Logo"
                  style="height:38px;width:auto;object-fit:contain;flex-shrink:0;">
             <div>
                 <h1 id="main-title">Ingeniería de Fabricación</h1>
@@ -265,7 +265,7 @@
         <div class="app-card" id="open-dashboard-card">
             <div class="hvac-icon-container" style="width:476px;height:476px;">
                 <img id="landing-logo"
-                     src="Logos/Logo-oscuro.png"
+                     src="Logos/logo-oscuro.png"
                      alt="Logo ZECO Monitor"
                      style="width:100%;height:100%;object-fit:contain;">
             </div>
@@ -1477,7 +1477,7 @@
         }
         function initTheme() {
             document.body.setAttribute('data-theme', STATE.theme);
-            const logoSrc = STATE.theme === 'dark' ? 'Logos/Logo-oscuro.png' : 'Logos/Logo-claro.png';
+            const logoSrc = STATE.theme === 'dark' ? 'Logos/logo-oscuro.png' : 'Logos/logo-claro.png';
             const landing = document.getElementById('landing-logo');
             const header  = document.getElementById('header-logo');
             if (landing) landing.src = logoSrc;
