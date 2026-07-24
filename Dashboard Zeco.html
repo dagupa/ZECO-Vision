@@ -154,9 +154,12 @@
         td { padding: 12px 14px; border-bottom: 1px solid var(--border); }
         tr:hover td { background: rgba(0,0,0,0.01); }
 
-        .pill { display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; margin-right: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .pill { display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: white; padding: 6px 14px; border-radius: 16px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25); transition: all 0.2s; }
+        .pill:hover { box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35); transform: translateY(-1px); }
         .pill.accent { background: var(--accent); color: white; }
-        .pill span { cursor: pointer; font-size: 1.1rem; line-height: 1; }
+        .pill.accent:hover { box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35); }
+        .pill span { cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0; transition: 0.15s; }
+        .pill span:hover { opacity: 0.7; }
 
         .hidden { display: none; }
         .toast {
@@ -238,15 +241,15 @@
         .project-dropdown-panel.open { display: block; }
 
         .project-search-wrapper {
-            padding: 6px; border-bottom: 1px solid var(--border);
+            padding: 6px 8px; border-bottom: 1px solid var(--border);
             display: flex; align-items: center; gap: 6px; background: var(--card-bg);
         }
-        .project-search-wrapper svg { flex-shrink: 0; color: var(--text-muted); width: 14px; height: 14px; }
+        .project-search-wrapper svg { flex-shrink: 0; width: 14px; height: 14px; min-width: 14px; color: var(--text-muted); }
         .project-search-input {
-            width: 100%; background: transparent; border: none; outline: none;
+            flex: 1; min-width: 0; background: transparent; border: none; outline: none;
             color: var(--text-main); font-size: 0.875rem; padding: 2px 0;
         }
-        .project-search-input::placeholder { color: var(--text-muted); }
+        .project-search-input::placeholder { color: var(--text-muted); font-style: italic; font-size: 0.8rem; }
 
         .project-options-list {
             max-height: 240px; overflow-y: auto; overscroll-behavior: contain;
@@ -357,8 +360,7 @@
 
             <!-- FILTROS ACTIVOS (izquierda) -->
             <div style="display:flex;flex-direction:column;">
-                <div class="section-label">Filtros Activos</div>
-                <div id="filter-pills" style="display:flex;flex-wrap:wrap;gap:6px;min-height:0;margin-top:4px;"></div>
+                <div class="section-label">Registros</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:1fr;gap:16px;margin-top:8px;flex:1;">
                     <div class="card highlight">
                         <div class="card-title">Registros Filtrados</div>
@@ -414,7 +416,7 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                         </svg>
-                        <input type="text" class="project-search-input" id="project-search-input" placeholder="Buscar proyecto..." autocomplete="off" spellcheck="false">
+                        <input type="text" class="project-search-input" id="project-search-input" placeholder="Teclea o haz scroll para buscar" autocomplete="off" spellcheck="false">
                     </div>
                     <div class="project-options-list" id="project-options-list"></div>
                 </div>
@@ -441,12 +443,15 @@
         <div class="main-content">
             <!-- GRÁFICO 1: DINÁMICO (FILTRADO) -->
             <div class="card" style="padding: 0; overflow: visible; height: fit-content;">
-                <div style="padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
-                    <span style="font-weight: 700;">ECTs pendientes</span>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="overlay-btn" class="btn btn-outline" onclick="toggleOverlay()" title="Superponer tendencia anual" style="padding:5px 10px;font-size:0.8rem;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>+ Anual
-                        </button>
+                <div style="padding: 16px 20px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                        <span style="font-weight: 700; white-space: nowrap;">ECTs pendientes</span>
+                        <div id="filter-pills" style="display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;min-width:0;"></div>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-shrink: 0;">
+                        <div class="btn-group">
+                            <button id="overlay-btn" class="btn-toggle" onclick="toggleOverlay()" title="Superponer tendencia anual">+ Anual</button>
+                        </div>
                         <div class="btn-group" id="dim-toggle-f">
                             <button class="btn-toggle active" data-val="2D">2D</button>
                             <button class="btn-toggle" data-val="3D">3D</button>
@@ -1166,8 +1171,7 @@
         function toggleOverlay() {
             STATE.overlayAnnual = !STATE.overlayAnnual;
             const btn = document.getElementById('overlay-btn');
-            btn.style.borderColor = STATE.overlayAnnual ? 'var(--accent)' : '';
-            btn.style.color = STATE.overlayAnnual ? 'var(--accent)' : '';
+            btn.classList.toggle('active', STATE.overlayAnnual);
             renderChart(false);
         }
 
@@ -1678,7 +1682,7 @@
         function renderPills() {
             const h = document.getElementById('filter-pills'); if(!h) return;
             h.innerHTML = ''; const { project, month, startDate, endDate } = STATE.currentFilters;
-            if (project) h.innerHTML += `<div class="pill">Proyecto: ${project} <span onclick="setFilter('project', '')">×</span></div>`;
+            if (project) h.innerHTML += `<div class="pill">Proyecto: ${project} <span onclick="setFilter('project', ''); if(window._projectDropdown) window._projectDropdown.reset();">×</span></div>`;
             if (month) h.innerHTML += `<div class="pill accent">Mes: ${month} <span onclick="setFilter('month', '')">×</span></div>`;
             if (startDate || endDate) {
                 const rangeStr = `${startDate || '...'} a ${endDate || '...'}`;
