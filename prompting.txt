@@ -1,0 +1,7 @@
+2026-10-08 16:20:44
+Prompt: Revisa el botón de copiar en la lista del ranking de proyectos porque no copia.
+Solución: Se corrigió el botón para usar un manejador independiente y el helper de portapapeles. Ahora comprueba si Clipboard API está disponible, captura errores y usa execCommand como fallback; muestra confirmación o error. Validación: probada en file:// con Clipboard API desactivada; execCommand recibió "ECT-101\nECT-102" y se mostró el aviso de éxito.
+
+2026-10-08 16:27:32
+Prompt: quiero añadir la versión del programa, para ello usaremos una constante que llamaremos VERSION y cada vez que hagamos una modificación al programa la iremos actualizando. La versión debe de mostrarse centrada en la parte inferior de la pantalla de inicio y en la ayuda. El formato será: Version X.X.X y comenzaremos por la version 0.1.0
+Solución: Se añadió la constante VERSION con valor 0.1.0. El texto "Version 0.1.0" se rellena desde esa constante en el pie centrado de la pantalla de inicio y al final de la ayuda. En futuras modificaciones, actualizar VERSION para reflejar la nueva versión.

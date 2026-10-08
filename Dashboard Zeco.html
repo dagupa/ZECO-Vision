@@ -85,6 +85,8 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             min-height: 60vh; text-align: center;
         }
+        .app-version { color: var(--text-muted); font-size: 0.75rem; text-align: center; }
+        #home-version { position: fixed; right: 0; bottom: 10px; left: 0; margin: 0; pointer-events: none; }
         .app-card {
             background: var(--card-bg); border: 1px solid var(--border); border-radius: 22px;
             padding: 56px; width: 100%; max-width: 630px; cursor: pointer; transition: 0.3s;
@@ -341,6 +343,7 @@
                 Ver sesión actual
             </div>
         </div>
+        <p id="home-version" class="app-version" aria-label="Versión del programa"></p>
     </div>
 
     <!-- Pantalla de Carga Fallback -->
@@ -652,6 +655,7 @@
                 </li>
             </ul>
             <button class="btn" onclick="document.getElementById('help-modal').style.display='none'" style="width: 100%; padding: 12px; margin-top: 10px;">Entendido</button>
+            <p id="help-version" class="app-version" aria-label="Versión del programa"></p>
         </div>
     </div>
 
@@ -671,6 +675,7 @@
     <div id="toast" class="toast">Copiado al portapapeles</div>
 
     <script>
+        const VERSION = '0.5.0';
         const STATE = {
             cleanData: [],
             annualData: [],
@@ -719,6 +724,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            const versionText = `Version ${VERSION}`;
+            document.getElementById('home-version').textContent = versionText;
+            document.getElementById('help-version').textContent = versionText;
             initTheme();
             setupEvents();
             checkPersistence();
@@ -1633,17 +1641,15 @@
             const ids = ects.map(e => e.id).join('\n');
             document.getElementById('ranking-modal-footer').innerHTML = `
                 <button class="btn btn-outline" onclick="showRankingModal()" style="padding:12px;">&#8592; Volver</button>
-                <button class="btn btn-ghost" title="Copiar lista de ECTs"
-                    onclick="navigator.clipboard.writeText('${ids.replace(/'/g,"\\'")}')
-                    .then(()=>{ this.style.color='var(--accent)'; setTimeout(()=>this.style.color='',1500); })
-                    .catch(()=>{ const ta=document.createElement('textarea');ta.value='${ids.replace(/'/g,"\\'").replace(/\n/g,'\\n')}';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta); })"
-                    style="padding:12px;">
+                <button class="btn btn-ghost" id="copy-ranking-ects" title="Copiar lista de ECTs" aria-label="Copiar lista de ECTs" style="padding:12px;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
                         <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
                     </svg>
                 </button>
                 <button class="btn" onclick="document.getElementById('ranking-modal').style.display='none'" style="flex:1;padding:12px;">Salir</button>`;
+            document.getElementById('copy-ranking-ects').addEventListener('click', () =>
+                copyToClipboard(ids, 'Lista de ECTs copiada al portapapeles'));
         }
 
         function renderTable() {
@@ -1713,10 +1719,27 @@
             renderChart(isGlobal); 
         }
 
-        function copyToClipboard(t) {
-            const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
-            ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-            const ts = document.getElementById('toast'); ts.innerHTML = "ID copiado al portapapeles"; ts.classList.add('show');
+        async function copyToClipboard(t, successMessage = 'ID copiado al portapapeles') {
+            let copied = false;
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                try {
+                    await navigator.clipboard.writeText(t);
+                    copied = true;
+                } catch (error) {
+                    copied = false;
+                }
+            }
+            if (!copied) {
+                const ta = document.createElement('textarea');
+                ta.value = t;
+                document.body.appendChild(ta);
+                ta.select();
+                try { copied = document.execCommand('copy'); } catch (error) { copied = false; }
+                document.body.removeChild(ta);
+            }
+            const ts = document.getElementById('toast');
+            ts.textContent = copied ? successMessage : 'No se pudo copiar al portapapeles';
+            ts.classList.add('show');
             setTimeout(() => ts.classList.remove('show'), 2000);
         }
 
